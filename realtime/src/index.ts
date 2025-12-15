@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import { GlobalAudioV2Engine } from "./globalAudioV2/engine.js";
 import type { PlayerLike } from "./globalAudioV2/types.js";
 import { getRandomNoteByDifficulty, type Difficulty } from "./harmony.js";
+import { computeHarmonicCompatibility } from "./harmonyCompatibility.js";
 
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -47,6 +48,9 @@ interface Player {
   // 난이도 및 부여된 음
   difficulty?: Difficulty;
   assignedNote?: string;
+  // 화성 호환성 관련
+  harmonicCompatibility?: number;
+  harmonicTargetId?: string | null;
 }
 
 interface ClusterInfo {
