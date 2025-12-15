@@ -1,0 +1,1084 @@
+import http from "node:http";
+import { Server } from "socket.io";
+import { GlobalAudioV2Engine } from "./globalAudioV2/engine.js";
+import type { PlayerLike } from "./globalAudioV2/types.js";
+import { getRandomNoteByDifficulty, type Difficulty } from "./harmony.js";
+
+const PORT = Number(process.env.PORT || 3001);
+const HOST = process.env.HOST || "0.0.0.0";
+const SOCKET_PATH = process.env.SOCKET_PATH || "/socket";
+
+// 게임 설정 (intersection 서버와 호환되는 기본값)
+const GAME_WIDTH = 1920 * 4;
+const GAME_HEIGHT = 602 * 4;
+const MAX_HEARTBEAT_MS = 5000;
+const TICK_HZ = 120; // 이동 계산 더 촘촘히
+const UPDATE_HZ = 30; // 기본 브로드캐스트 빈도 (모든 클라이언트)
+const SELF_UPDATE_HZ = 30; // 자기 플레이어 전용 보간용 업데이트
+const CLUSTER_RADIUS = 420;
+const CLUSTER_REFRESH_INTERVAL_MS = 200;
+const BASE_CHORD = [261.63, 329.63, 392];
+const GLOBAL_AUDIO_V2_HZ = 12; // server-side global signals + sequencer cadence
+
+type Vec2 = { x: number; y: number };
+
+interface Player {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  z: number; // depth
+  desiredVx: number;
+  desiredVy: number;
+  radius: number;
+  massTotal: number;
+  color: string;
+  screenWidth: number;
+  screenHeight: number;
+  lastHeartbeat: number;
+  vx: number;
+  vy: number;
+  // 서버가 계산한 중력 방향/거리(가장 가까운 플레이어 기준)
+  gravityDirX: number;
+  gravityDirY: number;
+  gravityDist: number;
+  // 소켓 없이 서버에서만 움직이는 봇인지 여부
+  isBot?: boolean;
+  // 난이도 및 부여된 음
+  difficulty?: Difficulty;
+  assignedNote?: string;
+}
+
+interface ClusterInfo {
+  id: string;
+  memberIds: string[];
+  memberCount: number;
+  centroid: Vec2;
+  gain: number;
+  chord: Array<{ freq: number; gain: number }>;
+}
+
+const players = new Map<string, Player>();
+const spectators = new Set<string>();
+
+const globalAudioV2Engine = new GlobalAudioV2Engine({
+  world: { width: GAME_WIDTH, height: GAME_HEIGHT },
+  innerRadius: 80,
+  pulsarDurationSec: 0.5,
+  // Keep parity with global-workspace entropy normalization
+  entropyMaxSpeed: 100,
+});
+// 봇의 간단한 상태 (움직이는 방향, 방향 전환 시점 등)
+const botState = new Map<string, { angle: number; nextTurnAt: number }>();
+const collisionLines = new Map<
+  string,
+  {
+    id: string;
+    players: [string, string];
+    startedAt: number;
+    lastEvent: number;
+  }
+>();
+const collisionEvents: Array<{
+  id: string;
+  players: [string, string];
+  position: Vec2;
+  radius: number;
+  timestamp: number;
+}> = [];
+// 현재 프레임에서 실제로 충돌한 플레이어 id 집합 (isColliding 플래그용)
+const collidingNow = new Set<string>();
+const COLLISION_DISTANCE = 80;
+const MIN_GRAVITY_DISTANCE = 80;
+const MAX_GRAVITY_DISTANCE = 1500; // 중력 작용 최대 반경 (기존보다 넓게)
+const MAX_SPEED = 320;
+const PLAYER_BASE_MASS = 5000;
+const INPUT_SMOOTH = 0.02;
+// 중력 세기: 실제 이동에는 너무 세지 않도록 절반 정도로 줄임
+const GRAVITY_TARGET_SPEED_RATIO = 0.4;
+const TARGET_GRAVITY_VELOCITY = MAX_SPEED * GRAVITY_TARGET_SPEED_RATIO;
+const MAX_GRAVITY_ACCEL = TARGET_GRAVITY_VELOCITY * INPUT_SMOOTH * TICK_HZ; // accel so steady-state ≈ 0.5 user max
+const GRAVITY_G =
+  (MAX_GRAVITY_ACCEL * MIN_GRAVITY_DISTANCE * MIN_GRAVITY_DISTANCE) /
+  PLAYER_BASE_MASS;
+const LOG_GRAVITY = 0;
+const LOG_GRAVITY_INTERVAL_MS = Number(
+  process.env.LOG_GRAVITY_INTERVAL_MS || 1000
+);
+
+// 서버에서 자동으로 움직이는 봇 설정 (기본 0 = 비활성)
+const BOT_TARGET_COUNT = Number(process.env.BOT_COUNT || 0);
+const BOT_MIN_SPEED = 80;
+const BOT_MAX_SPEED = 200;
+const BOT_TURN_INTERVAL_MIN_MS = 4000;
+const BOT_TURN_INTERVAL_MAX_MS = 12000;
+
+const rand = (min: number, max: number) => Math.random() * (max - min) + min;
+
+// ---- Toroidal world helpers (좌↔우/상↔하 무한 래핑) ----
+const wrapCoord = (value: number, size: number) => {
+  if (!Number.isFinite(value) || !Number.isFinite(size) || size <= 0)
+    return value;
+  // [0, size) 범위로 래핑
+  return ((value % size) + size) % size;
+};
+
+const wrapDelta = (delta: number, size: number) => {
+  if (!Number.isFinite(delta) || !Number.isFinite(size) || size <= 0)
+    return delta;
+  // [-size/2, size/2) 범위로 접어 "가장 가까운" 차이를 반환
+  return ((((delta + size / 2) % size) + size) % size) - size / 2;
+};
+
+const torusDx = (fromX: number, toX: number) =>
+  wrapDelta(toX - fromX, GAME_WIDTH);
+const torusDy = (fromY: number, toY: number) =>
+  wrapDelta(toY - fromY, GAME_HEIGHT);
+
+const torusMidpoint = (a: Vec2, b: Vec2): Vec2 => {
+  // a에서 b로 가는 "가장 가까운" 벡터를 반만 이동한 지점을 midpoint로 사용
+  const dx = wrapDelta(b.x - a.x, GAME_WIDTH);
+  const dy = wrapDelta(b.y - a.y, GAME_HEIGHT);
+  return {
+    x: wrapCoord(a.x + dx * 0.5, GAME_WIDTH),
+    y: wrapCoord(a.y + dy * 0.5, GAME_HEIGHT),
+  };
+};
+
+const randomDepth = () => {
+  const base = rand(800, 2200);
+  const skew = Math.max(0.15, Math.pow(Math.random(), 0.35));
+  const jitter = rand(0.75, 1.25);
+  const sign = Math.random() < 0.5 ? -1 : 1;
+  return sign * base * skew * jitter;
+};
+
+function spawnPoint(): Vec2 {
+  const padding = 100;
+  return {
+    x: rand(padding, GAME_WIDTH - padding),
+    y: rand(padding, GAME_HEIGHT - padding),
+  };
+}
+
+let botCounter = 0;
+
+function spawnBot() {
+  const pos = spawnPoint();
+  const id = `bot:${++botCounter}`;
+  const angle = rand(0, Math.PI * 2);
+  const speed = rand(BOT_MIN_SPEED, BOT_MAX_SPEED);
+  // 봇은 흰색으로 생성
+  const color = "rgba(255,255,255,0.8)";
+
+  // 봇도 난이도와 음 부여 (랜덤 난이도)
+  const difficulties: Difficulty[] = ['easy', 'medium', 'hard'];
+  const difficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+  const assignedNote = getRandomNoteByDifficulty(difficulty);
+  const p: Player = {
+    id,
+    name: `bot-${botCounter}`,
+    x: pos.x,
+    y: pos.y,
+    z: randomDepth(),
+    desiredVx: Math.cos(angle) * speed,
+    desiredVy: Math.sin(angle) * speed,
+    radius: 20,
+    massTotal: PLAYER_BASE_MASS,
+    color,
+    screenWidth: GAME_WIDTH,
+    screenHeight: GAME_HEIGHT,
+    lastHeartbeat: Date.now(),
+    vx: 0,
+    vy: 0,
+    gravityDirX: 0,
+    gravityDirY: 0,
+    gravityDist: Number.POSITIVE_INFINITY,
+    isBot: true,
+    difficulty,
+    assignedNote,
+    harmonicCompatibility: 0,
+    harmonicTargetId: null,
+  };
+
+  players.set(id, p);
+  const now = Date.now();
+  botState.set(id, {
+    angle,
+    nextTurnAt: now + rand(BOT_TURN_INTERVAL_MIN_MS, BOT_TURN_INTERVAL_MAX_MS),
+  });
+  removePlayerCollisions(id);
+  // ensureClustersFresh는 정기 업데이트에서 자동으로 처리됨 (강제 호출 제거)
+  return p;
+}
+
+function ensureBots() {
+  if (BOT_TARGET_COUNT <= 0) return;
+  let botCount = 0;
+  for (const p of players.values()) {
+    if (p.isBot) botCount += 1;
+  }
+  while (botCount < BOT_TARGET_COUNT) {
+    spawnBot();
+    botCount += 1;
+  }
+}
+
+function updateBotDesiredVelocity(p: Player, now: number) {
+  if (!p.isBot) return;
+  let state = botState.get(p.id);
+  if (!state) {
+    state = {
+      angle: rand(0, Math.PI * 2),
+      nextTurnAt:
+        now + rand(BOT_TURN_INTERVAL_MIN_MS, BOT_TURN_INTERVAL_MAX_MS),
+    };
+    botState.set(p.id, state);
+  }
+
+  // 방향 전환 시점이 되면 새로운 방향으로 회전
+  if (now >= state.nextTurnAt) {
+    state.angle = rand(0, Math.PI * 2);
+    state.nextTurnAt =
+      now + rand(BOT_TURN_INTERVAL_MIN_MS, BOT_TURN_INTERVAL_MAX_MS);
+  }
+
+  // 토러스 월드에서는 "가장자리 회피"가 필요 없다 (어디든 연결됨)
+  // 봇은 중력보다 랜덤 움직임을 우선시하도록 (중력의 영향을 줄임)
+  const speed = rand(BOT_MIN_SPEED, BOT_MAX_SPEED);
+  // 랜덤 방향에 중력의 일부만 반영 (랜덤성이 더 강하게)
+  const gravityInfluence = 0.3; // 중력 영향 30%만 반영
+  const randomVx = Math.cos(state.angle) * speed;
+  const randomVy = Math.sin(state.angle) * speed;
+  const gravityVx = p.gravityDirX ? p.gravityDirX * speed * 0.5 : 0;
+  const gravityVy = p.gravityDirY ? p.gravityDirY * speed * 0.5 : 0;
+  
+  p.desiredVx = randomVx * (1 - gravityInfluence) + gravityVx * gravityInfluence;
+  p.desiredVy = randomVy * (1 - gravityInfluence) + gravityVy * gravityInfluence;
+  
+  // 봇은 하트비트가 끊기지 않도록 항상 갱신
+  p.lastHeartbeat = now;
+}
+
+function moveTowards(p: Player, dt: number) {
+  // 가속/감속 기반 부드러운 움직임: 클라이언트가 보낸 원하는 속도에 수렴
+  const SMOOTH = INPUT_SMOOTH; // 응답성(0~1)
+  const desiredVx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, p.desiredVx));
+  const desiredVy = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, p.desiredVy));
+  p.vx += (desiredVx - p.vx) * SMOOTH;
+  p.vy += (desiredVy - p.vy) * SMOOTH;
+  // clamp 대신 wrap: 왼쪽으로 나가면 오른쪽에서 등장 (상/하도 동일)
+  p.x = wrapCoord(p.x + p.vx * dt, GAME_WIDTH);
+  p.y = wrapCoord(p.y + p.vy * dt, GAME_HEIGHT);
+}
+
+function applyNearestGravity(p: Player, list: Player[], dt: number) {
+  if (list.length <= 1 || p.massTotal <= 0) {
+    // 다른 플레이어가 없으면 중력 정보 초기화
+    p.gravityDirX = 0;
+    p.gravityDirY = 0;
+    p.gravityDist = Number.POSITIVE_INFINITY;
+    return;
+  }
+  
+  // 화성 호환성을 고려하여 가장 좋은 조합의 플레이어 찾기
+  const harmony = globalAudioV2Engine.getCurrentHarmony?.();
+  let bestMatch: Player | null = null;
+  let bestCompatibility = 0;
+  let bestDistSq = Number.POSITIVE_INFINITY;
+  
+  for (const other of list) {
+    if (other.id === p.id) continue;
+    const dx = torusDx(p.x, other.x);
+    const dy = torusDy(p.y, other.y);
+    const distSq = dx * dx + dy * dy;
+    if (distSq === 0) continue;
+    
+    // 최대 반경 내에 있는지 확인
+    const dist = Math.sqrt(distSq);
+    if (dist > MAX_GRAVITY_DISTANCE) continue;
+    
+    // 화성 호환성 계산
+    const compatibility = computeHarmonicCompatibility(
+      p.assignedNote,
+      other.assignedNote,
+      harmony?.currentKey || 'C',
+      harmony?.currentMode || 'major'
+    );
+    
+    // 거리와 호환성을 결합한 점수 (호환성이 높을수록, 가까울수록 높은 점수)
+    // 거리 가중치: 가까울수록 높음 (최대 반경에서 0.1, 최소 거리에서 1.0)
+    const distanceWeight = 0.1 + (1.0 - 0.1) * (1 - dist / MAX_GRAVITY_DISTANCE);
+    // 호환성 가중치: 호환성이 높을수록 높음
+    const compatibilityWeight = compatibility;
+    // 최종 점수: 거리와 호환성의 곱 (둘 다 높을수록 좋음)
+    const score = distanceWeight * compatibilityWeight;
+    
+    // 가장 높은 점수를 가진 플레이어 선택
+    if (score > (bestCompatibility * (0.1 + (1.0 - 0.1) * (1 - Math.sqrt(bestDistSq) / MAX_GRAVITY_DISTANCE))) || 
+        (score === (bestCompatibility * (0.1 + (1.0 - 0.1) * (1 - Math.sqrt(bestDistSq) / MAX_GRAVITY_DISTANCE))) && distSq < bestDistSq)) {
+      bestMatch = other;
+      bestCompatibility = compatibility;
+      bestDistSq = distSq;
+    }
+  }
+  
+  if (!bestMatch) {
+    p.gravityDirX = 0;
+    p.gravityDirY = 0;
+    p.gravityDist = Number.POSITIVE_INFINITY;
+    (p as any).harmonicCompatibility = 0;
+    (p as any).harmonicTargetId = null;
+    return;
+  }
+  
+  const dist = Math.max(Math.sqrt(bestDistSq), MIN_GRAVITY_DISTANCE);
+  const nearest = bestMatch;
+  // 토러스 기준 방향(가장 가까운 벡터)
+  const dirX = torusDx(p.x, nearest.x) / dist;
+  const dirY = torusDy(p.y, nearest.y) / dist;
+  const denom = dist * dist;
+  if (denom <= 0 || !Number.isFinite(denom)) {
+    return;
+  }
+  
+  // 화성 호환성 기반 중력 강도 조절
+  let baseAccelMagnitude =
+    0.6 *
+    Math.min(
+      (GRAVITY_G * Math.max(nearest.massTotal, 1)) / denom,
+      MAX_GRAVITY_ACCEL
+    );
+  
+  // 호환성이 높을수록 중력 강도 증가 (최대 3배, 더 강하게)
+  // 호환성 1.0일 때 3배, 0.5일 때 2배, 0일 때 1배
+  const harmonicBoost = 1.0 + (bestCompatibility * 2.0); // 1.0 ~ 3.0
+  const accelMagnitude = baseAccelMagnitude * harmonicBoost;
+  
+  // 호환성 정보를 Player에 저장 (비주얼 피드백용)
+  (p as any).harmonicCompatibility = bestCompatibility;
+  (p as any).harmonicTargetId = nearest.id;
+  
+  p.vx += accelMagnitude * dirX * dt;
+  p.vy += accelMagnitude * dirY * dt;
+  // 시각화/클라이언트용 중력 벡터 저장
+  p.gravityDirX = dirX;
+  p.gravityDirY = dirY;
+  p.gravityDist = dist;
+  if (LOG_GRAVITY) {
+    const now = Date.now();
+    const lastLog = lastGravityLogByPlayer.get(p.id) ?? 0;
+    if (now - lastLog >= LOG_GRAVITY_INTERVAL_MS) {
+      console.log("[gravity]", {
+        playerId: p.id,
+        targetId: nearest.id,
+        dist: Number(dist.toFixed(2)),
+        accel: Number(accelMagnitude.toFixed(2)),
+        vx: Number(p.vx.toFixed(2)),
+        vy: Number(p.vy.toFixed(2)),
+      });
+      lastGravityLogByPlayer.set(p.id, now);
+    }
+  }
+}
+
+function toServerPlayer(p: Player) {
+  return {
+    id: p.id,
+    name: p.name,
+    x: p.x,
+    y: p.y,
+    z: p.z,
+    massTotal: p.massTotal,
+    color: p.color,
+    assignedNote: p.assignedNote,
+    difficulty: p.difficulty,
+    harmonicCompatibility: (p as any).harmonicCompatibility,
+    harmonicTargetId: (p as any).harmonicTargetId,
+    cells: [
+      {
+        x: p.x,
+        y: p.y,
+        radius: p.radius,
+        vx: p.vx,
+        vy: p.vy,
+        z: p.z,
+      },
+    ],
+  };
+}
+
+function visiblePlayers(forId: string) {
+  const viewer = players.get(forId);
+  const hideBotsForViewer = viewer && !viewer.isBot;
+
+  const list = Array.from(players.values())
+    .filter((u) => {
+      if (u.id === forId) return false;
+      if (hideBotsForViewer && u.isBot) return false;
+      return true;
+    })
+    .map(toServerPlayer);
+
+  return list;
+}
+
+let clusterSnapshot: ClusterInfo[] = [];
+let playerClusterMap = new Map<string, string>();
+let lastClusterRefresh = 0;
+let largestClusterId: string | null = null;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const NOISE_SLOT_COUNT = 4;
+type NoiseSlotEntry = {
+  slot: number;
+  nodeIds: string[];
+  label: string;
+};
+const noiseSlotLabels = [
+  "Self Frequency",
+  "Self Gain",
+  "Cluster Chord",
+  "Cluster Gain",
+];
+const createEmptyNoiseSlot = (slot: number): NoiseSlotEntry => ({
+  slot,
+  nodeIds: [],
+  label: noiseSlotLabels[slot] || `Slot ${slot + 1}`,
+});
+let noiseSlots: NoiseSlotEntry[] = Array.from(
+  { length: NOISE_SLOT_COUNT },
+  (_, slot) => createEmptyNoiseSlot(slot)
+);
+const lastGravityLogByPlayer = new Map<string, number>();
+
+const sanitizeNoiseSlotPayload = (payload: unknown) => {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    typeof (payload as { slot?: unknown }).slot !== "number"
+  ) {
+    return null;
+  }
+  const slot = (payload as { slot: number }).slot;
+  if (slot < 0 || slot >= NOISE_SLOT_COUNT) {
+    return null;
+  }
+  const rawNodeIds = (payload as { nodeIds?: unknown }).nodeIds;
+  const nodeIds = Array.isArray(rawNodeIds)
+    ? rawNodeIds
+        .map((id) => id)
+        .filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0
+        )
+    : [];
+  return {
+    slot,
+    nodeIds,
+  };
+};
+
+const broadcastNoiseSlots = () => {
+  io.emit("noiseSlots:update", noiseSlots);
+};
+
+function recomputeClusters() {
+  const arr = Array.from(players.values());
+  const visited = new Set<string>();
+  const assignments = new Map<string, string>();
+  const clusters: ClusterInfo[] = [];
+  const radiusSq = CLUSTER_RADIUS * CLUSTER_RADIUS;
+
+  // 토러스 좌표에서 centroid를 자연스럽게 계산하기 위해 원형 평균(원형통계)을 사용
+  const circularMean = (values: number[], period: number) => {
+    if (!values.length || !Number.isFinite(period) || period <= 0) return 0;
+    let sinSum = 0;
+    let cosSum = 0;
+    for (const v of values) {
+      const angle = (2 * Math.PI * wrapCoord(v, period)) / period;
+      sinSum += Math.sin(angle);
+      cosSum += Math.cos(angle);
+    }
+    const meanAngle = Math.atan2(
+      sinSum / values.length,
+      cosSum / values.length
+    );
+    // atan2 결과는 [-π, π], 이를 [0, 2π)로 보정
+    const normalized = meanAngle < 0 ? meanAngle + 2 * Math.PI : meanAngle;
+    return (normalized / (2 * Math.PI)) * period;
+  };
+
+  for (const player of arr) {
+    if (visited.has(player.id)) continue;
+    const queue: Player[] = [player];
+    visited.add(player.id);
+    const members: Player[] = [];
+
+    while (queue.length) {
+      const current = queue.pop()!;
+      members.push(current);
+      for (const candidate of arr) {
+        if (visited.has(candidate.id)) continue;
+        const dx = wrapDelta(candidate.x - current.x, GAME_WIDTH);
+        const dy = wrapDelta(candidate.y - current.y, GAME_HEIGHT);
+        if (dx * dx + dy * dy <= radiusSq) {
+          visited.add(candidate.id);
+          queue.push(candidate);
+        }
+      }
+    }
+
+    const clusterId = members[0]?.id ?? `cluster-${clusters.length}`;
+    members.forEach((member) => assignments.set(member.id, clusterId));
+    const memberCount = members.length || 1;
+    const centroid = {
+      x: circularMean(
+        members.map((m) => m.x),
+        GAME_WIDTH
+      ),
+      y: circularMean(
+        members.map((m) => m.y),
+        GAME_HEIGHT
+      ),
+    };
+    const gain = clamp(memberCount / 4, 0.1, 1);
+    const chord = BASE_CHORD.map((freq, idx) => ({
+      freq: Number(
+        (freq * (1 + (memberCount - 1) * 0.02 * (idx + 1))).toFixed(2)
+      ),
+      gain: Number((gain * (1 - idx * 0.15)).toFixed(3)),
+    }));
+    clusters.push({
+      id: clusterId,
+      memberIds: members.map((m) => m.id),
+      memberCount,
+      centroid,
+      gain,
+      chord,
+    });
+  }
+
+  clusterSnapshot = clusters;
+  playerClusterMap = assignments;
+  largestClusterId =
+    clusters.reduce<ClusterInfo | null>(
+      (prev, current) =>
+        !prev || current.memberCount > prev.memberCount ? current : prev,
+      null
+    )?.id ?? null;
+  lastClusterRefresh = Date.now();
+}
+
+function ensureClustersFresh(force = false) {
+  if (force || Date.now() - lastClusterRefresh > CLUSTER_REFRESH_INTERVAL_MS) {
+    recomputeClusters();
+  }
+}
+
+const serializeCluster = (cluster: ClusterInfo) => ({
+  clusterId: cluster.id,
+  chord: cluster.chord,
+  memberCount: cluster.memberCount,
+  centroid: cluster.centroid,
+  gain: cluster.gain,
+});
+
+const computeNoiseLevel = (p: Player) =>
+  clamp(Math.hypot(p.vx, p.vy) / MAX_SPEED, 0, 1);
+
+const computeAmbientLevel = () => clamp(players.size / 12, 0, 1);
+
+const emitAudioForPlayer = (player: Player) => {
+  const socket = io.sockets.sockets.get(player.id);
+  if (!socket) return;
+  const clusterId = playerClusterMap.get(player.id) ?? null;
+  const cluster = clusterSnapshot.find((c) => c.id === clusterId);
+  socket.emit("audioSelf", {
+    noiseLevel: computeNoiseLevel(player),
+    ambientLevel: computeAmbientLevel(),
+    clusterId,
+  });
+  if (cluster) {
+    socket.emit("audioCluster", serializeCluster(cluster));
+  }
+};
+
+const emitAudioGlobal = (socketId: string) => {
+  const socket = io.sockets.sockets.get(socketId);
+  if (!socket) return;
+  if (!clusterSnapshot.length) {
+    socket.emit("audioGlobal", { cluster: null });
+    return;
+  }
+  const cluster =
+    clusterSnapshot.find((c) => c.id === largestClusterId) ??
+    clusterSnapshot[0];
+  socket.emit("audioGlobal", { cluster: serializeCluster(cluster) });
+};
+
+const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+
+const EVENT_COOLDOWN_MS = 1200;
+
+function detectCollisions() {
+  const arr = Array.from(players.values());
+  collidingNow.clear();
+  for (let i = 0; i < arr.length; i += 1) {
+    for (let j = i + 1; j < arr.length; j += 1) {
+      const pa = arr[i];
+      const pb = arr[j];
+      const dx = wrapDelta(pb.x - pa.x, GAME_WIDTH);
+      const dy = wrapDelta(pb.y - pa.y, GAME_HEIGHT);
+      const dist = Math.hypot(dx, dy);
+      if (dist <= COLLISION_DISTANCE) {
+        // 현재 충돌 중인 플레이어 기록
+        collidingNow.add(pa.id);
+        collidingNow.add(pb.id);
+        const key = pairKey(pa.id, pb.id);
+        const now = Date.now();
+        const existing = collisionLines.get(key);
+        if (!existing) {
+          collisionLines.set(key, {
+            id: key,
+            players: [pa.id, pb.id],
+            startedAt: now,
+            lastEvent: now,
+          });
+          const mid = torusMidpoint({ x: pa.x, y: pa.y }, { x: pb.x, y: pb.y });
+          collisionEvents.push({
+            id: `${key}-${now}`,
+            players: [pa.id, pb.id],
+            position: mid,
+            radius: 80,
+            timestamp: now,
+          });
+        } else if (now - existing.lastEvent > EVENT_COOLDOWN_MS) {
+          existing.lastEvent = now;
+          const mid = torusMidpoint({ x: pa.x, y: pa.y }, { x: pb.x, y: pb.y });
+          collisionEvents.push({
+            id: `${key}-${now}`,
+            players: existing.players,
+            position: mid,
+            radius: 80,
+            timestamp: now,
+          });
+        }
+      }
+    }
+  }
+}
+
+function removePlayerCollisions(id: string) {
+  for (const [key, pair] of collisionLines) {
+    if (pair.players[0] === id || pair.players[1] === id) {
+      collisionLines.delete(key);
+    }
+  }
+}
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  // 로컬 개발용 (http)
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:4000",
+  "http://127.0.0.1:4000",
+  "http://localhost:7773",
+  "http://127.0.0.1:7773",
+  // 로컬 HTTPS (Caddy 프록시를 통한 접속)
+  "https://localhost",
+  "https://127.0.0.1",
+  // 프로덕션/스테이징 도메인
+  "https://intersection-web.onrender.com",
+  "https://intersection-audio.onrender.com",
+  "https://intersection-nextjs.site",
+  "https://www.intersection-nextjs.site",
+];
+
+const parseOrigins = (raw?: string) =>
+  (raw || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+const allowedOrigins = Array.from(
+  new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...parseOrigins(process.env.CORS_ORIGINS),
+  ])
+);
+
+const httpServer = http.createServer((_, res) => {
+  res.statusCode = 200;
+  res.end("ok");
+});
+
+const isDev = process.env.NODE_ENV !== "production";
+const allowIpOriginsAlways = process.env.CORS_ALLOW_IP_ORIGINS === "true";
+const allowIpOriginsInDev =
+  process.env.CORS_ALLOW_IP_ORIGINS_IN_DEV !== "false";
+
+const isLocalLikeOrigin = (origin: string) => {
+  // 예:
+  // - https://localhost
+  // - https://127.0.0.1
+  // - https://192.168.1.19
+  // - http://10.0.0.5:3000
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    const host = url.hostname;
+    if (host === "localhost" || host === "127.0.0.1") return true;
+    // IPv4
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+type SocketIoCorsOriginFn = (
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+) => void;
+
+const originChecker: SocketIoCorsOriginFn = (
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+) => {
+  // socket.io에서 origin이 undefined로 들어오는 경우가 있어서 허용
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+  if (
+    (allowIpOriginsAlways || (isDev && allowIpOriginsInDev)) &&
+    isLocalLikeOrigin(origin)
+  ) {
+    return callback(null, true);
+  }
+  return callback(new Error("CORS origin not allowed"), false);
+};
+
+const io = new Server(httpServer, {
+  path: SOCKET_PATH,
+  transports: ["websocket"],
+  allowEIO3: false,
+  cors: {
+    origin: originChecker,
+    credentials: true,
+  },
+  pingInterval: 10000,
+  pingTimeout: 20000,
+});
+
+io.on("connection", (socket) => {
+  const type = (socket.handshake.query?.type as string) || "player";
+  const isBotConnection = type === "bot";
+  socket.emit("noiseSlots:init", noiseSlots);
+
+  if (type === "spectator") {
+    spectators.add(socket.id);
+    // spectator는 즉시 welcome
+    socket.emit("welcome", {}, { width: GAME_WIDTH, height: GAME_HEIGHT });
+
+    socket.on("gotit", () => {
+      // no-op: spectator 등록만
+    });
+  } else {
+    // player 핸들러
+    socket.on("respawn", () => {
+      const pos = spawnPoint();
+      const existing = players.get(socket.id);
+      const name = existing?.name || "";
+      // 난이도 기반 음 부여 (기존 난이도 유지, 없으면 'easy' 기본값)
+      const difficulty = existing?.difficulty || 'easy';
+      const assignedNote = getRandomNoteByDifficulty(difficulty);
+      const p: Player = {
+        id: socket.id,
+        name,
+        x: pos.x,
+        y: pos.y,
+        z: randomDepth(),
+        desiredVx: 0,
+        desiredVy: 0,
+        radius: 20,
+        massTotal: PLAYER_BASE_MASS,
+        color: "rgba(255,255,255,0.8)",
+        screenWidth: existing?.screenWidth || 0,
+        screenHeight: existing?.screenHeight || 0,
+        lastHeartbeat: Date.now(),
+        vx: 0,
+        vy: 0,
+        gravityDirX: 0,
+        gravityDirY: 0,
+        gravityDist: Number.POSITIVE_INFINITY,
+        isBot: isBotConnection,
+        difficulty,
+        assignedNote,
+      };
+      players.set(socket.id, p);
+      socket.emit("welcome", toServerPlayer(p), {
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+      });
+      ensureClustersFresh(true);
+    });
+
+    socket.on(
+      "gotit",
+      (data: {
+        name?: string;
+        screenWidth?: number;
+        screenHeight?: number;
+        difficulty?: 'easy' | 'medium' | 'hard';
+      }) => {
+        const p = players.get(socket.id);
+        if (!p) return;
+        p.name = (data.name || "").toString().slice(0, 24);
+        p.screenWidth = Number(data.screenWidth || 0);
+        p.screenHeight = Number(data.screenHeight || 0);
+        // 난이도 정보 저장 및 음 부여
+        if (data.difficulty) {
+          const difficultyChanged = p.difficulty !== data.difficulty;
+          p.difficulty = data.difficulty;
+          // 난이도가 변경되었거나 음이 없으면 해당 난이도에 맞는 음 부여
+          if (difficultyChanged || !p.assignedNote) {
+            p.assignedNote = getRandomNoteByDifficulty(data.difficulty);
+            // eslint-disable-next-line no-console
+            console.log("[Server] Assigned note by difficulty:", {
+              playerId: p.id,
+              difficulty: data.difficulty,
+              assignedNote: p.assignedNote,
+              wasChanged: difficultyChanged,
+            });
+          }
+        } else if (!p.assignedNote) {
+          // 난이도가 없으면 기본값 'easy'로 음 부여
+          p.difficulty = 'easy';
+          p.assignedNote = getRandomNoteByDifficulty('easy');
+        }
+      }
+    );
+
+    socket.on(
+      "windowResized",
+      (data: { screenWidth?: number; screenHeight?: number }) => {
+        const p = players.get(socket.id);
+        if (!p) return;
+        p.screenWidth = Number(data.screenWidth || 0);
+        p.screenHeight = Number(data.screenHeight || 0);
+      }
+    );
+
+    socket.on("0", (payload: { vx?: number; vy?: number }) => {
+      const p = players.get(socket.id);
+      if (!p) return;
+      p.lastHeartbeat = Date.now();
+      p.desiredVx = Number(payload?.vx || 0);
+      p.desiredVy = Number(payload?.vy || 0);
+    });
+  }
+
+  socket.on("disconnect", () => {
+    spectators.delete(socket.id);
+    players.delete(socket.id);
+    removePlayerCollisions(socket.id);
+    ensureClustersFresh(true);
+  });
+
+  // 외부 파라미터 브리지: 클라이언트가 보낸 파라미터 변경을 모두에게 브로드캐스트
+  // payload 예: { type: 'setParam', nodeId: '0', paramName: 'value', value: 880 }
+  socket.on("param", (payload: unknown) => {
+    try {
+      io.emit("param", payload);
+    } catch {}
+  });
+
+  socket.on("noiseSlots:set", (payload: unknown) => {
+    const sanitized = sanitizeNoiseSlotPayload(payload);
+    if (!sanitized) {
+      return;
+    }
+    noiseSlots = noiseSlots.map((entry) =>
+      entry.slot === sanitized.slot
+        ? {
+            ...entry,
+            nodeIds: sanitized.nodeIds.slice(0, 8),
+          }
+        : entry
+    );
+    broadcastNoiseSlots();
+  });
+
+  socket.on("noiseSlots:clear", (payload: unknown) => {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      typeof (payload as { slot?: unknown }).slot !== "number"
+    ) {
+      return;
+    }
+    const slot = (payload as { slot: number }).slot;
+    if (slot < 0 || slot >= NOISE_SLOT_COUNT) return;
+    noiseSlots = noiseSlots.map((entry) =>
+      entry.slot === slot ? createEmptyNoiseSlot(slot) : entry
+    );
+    broadcastNoiseSlots();
+  });
+
+  // 봇 생성/제거 이벤트
+  socket.on("bot:spawn", () => {
+    // 한 번에 10개씩 생성하되, 약간의 지연을 두고 생성하여 서버 부하 분산
+    const spawnCount = 10;
+    for (let i = 0; i < spawnCount; i++) {
+      setTimeout(() => {
+        spawnBot();
+      }, i * 50); // 각 봇마다 50ms씩 지연
+    }
+    // eslint-disable-next-line no-console
+    console.log("[Server] 10 bots spawning (staggered)");
+    // 정기 브로드캐스트에서 자동으로 전달됨 (즉시 브로드캐스트 제거)
+  });
+
+  socket.on("bot:remove", () => {
+    // 모든 봇 제거
+    const botIds: string[] = [];
+    for (const p of players.values()) {
+      if (p.isBot) {
+        botIds.push(p.id);
+      }
+    }
+    for (const id of botIds) {
+      players.delete(id);
+      botState.delete(id);
+      removePlayerCollisions(id);
+    }
+    // eslint-disable-next-line no-console
+    console.log("[Server] All bots removed by client:", botIds.length);
+  });
+});
+
+// 게임 루프: 이동 계산
+setInterval(() => {
+  // 항상 원하는 수만큼 봇이 유지되도록 보정
+  ensureBots();
+
+  const now = Date.now();
+  const dt = 1 / TICK_HZ;
+  const playerList = Array.from(players.values());
+  for (const p of playerList) {
+    // 봇은 하트비트 없이도 계속 움직이게 허용
+    if (!p.isBot && now - p.lastHeartbeat > MAX_HEARTBEAT_MS) {
+      // 하트비트 타임아웃: 단순히 타겟 무시
+      continue;
+    }
+    if (p.isBot) {
+      updateBotDesiredVelocity(p, now);
+    }
+    applyNearestGravity(p, playerList, dt);
+    moveTowards(p, dt);
+  }
+}, 1000 / TICK_HZ);
+
+// 업데이트 브로드캐스트
+setInterval(() => {
+  detectCollisions();
+  ensureClustersFresh();
+  const collisionSnapshot = Array.from(collisionLines.values());
+  const eventsSnapshot = collisionEvents.splice(0);
+
+  // spectator 업데이트
+  for (const id of spectators) {
+    const s = io.sockets.sockets.get(id);
+    if (!s) continue;
+    const playerData = {
+      x: GAME_WIDTH / 2,
+      y: GAME_HEIGHT / 2,
+      cells: [],
+      massTotal: 0,
+      color: "#ccc",
+      id,
+      name: "",
+    };
+    s.emit(
+      "serverTellPlayerMove",
+      playerData,
+      Array.from(players.values()).map(toServerPlayer),
+      { collisions: collisionSnapshot, collisionEvents: eventsSnapshot }
+    );
+    s.emit("leaderboard", { players: players.size });
+    emitAudioGlobal(id);
+  }
+
+  // 각 플레이어별 업데이트
+  for (const p of players.values()) {
+    const s = io.sockets.sockets.get(p.id);
+    if (!s) continue;
+    const isColliding = collidingNow.has(p.id);
+    const gravity =
+      Number.isFinite(p.gravityDist) && p.gravityDist < Number.POSITIVE_INFINITY
+        ? {
+            x: p.gravityDirX,
+            y: p.gravityDirY,
+            dist: p.gravityDist,
+          }
+        : null;
+    s.emit("serverTellPlayerMove", toServerPlayer(p), visiblePlayers(p.id), {
+      collisions: collisionSnapshot,
+      collisionEvents: eventsSnapshot,
+      gravity,
+      isCollidingSelf: isColliding,
+    });
+    s.emit("leaderboard", { players: players.size });
+    emitAudioForPlayer(p);
+  }
+}, 1000 / UPDATE_HZ);
+
+// 자기 플레이어 전용 고주파수 업데이트
+setInterval(() => {
+  for (const p of players.values()) {
+    const s = io.sockets.sockets.get(p.id);
+    if (!s) continue;
+    const isColliding = collidingNow.has(p.id);
+    const gravity =
+      Number.isFinite(p.gravityDist) && p.gravityDist < Number.POSITIVE_INFINITY
+        ? {
+            x: p.gravityDirX,
+            y: p.gravityDirY,
+            dist: p.gravityDist,
+          }
+        : null;
+    // 보간용 빠른 업데이트: 자기 자신 정보 + 최소 메타만 전송
+    s.emit("serverTellPlayerMove", toServerPlayer(p), [], {
+      fast: true,
+      gravity,
+      isCollidingSelf: isColliding,
+    });
+    emitAudioForPlayer(p);
+  }
+}, 1000 / SELF_UPDATE_HZ);
+
+// Global Audio V2 (signals + mapping params + MonoSeq grids) broadcast to spectators.
+setInterval(() => {
+  if (spectators.size === 0) return;
+  const now = Date.now();
+  const list: PlayerLike[] = Array.from(players.values()).map((p) => ({
+    id: p.id,
+    x: p.x,
+    y: p.y,
+    vx: p.vx,
+    vy: p.vy,
+  }));
+  const payload = globalAudioV2Engine.step(list, now);
+  for (const id of spectators) {
+    const s = io.sockets.sockets.get(id);
+    if (!s) continue;
+    s.emit("audioGlobalV2", payload);
+  }
+}, 1000 / GLOBAL_AUDIO_V2_HZ);
+
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Realtime on http://${HOST}:${PORT}`);
+});
