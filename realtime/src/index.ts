@@ -5,7 +5,15 @@ import type { PlayerLike } from "./globalAudioV2/types.js";
 import { getRandomNoteByDifficulty, type Difficulty } from "./harmony.js";
 import { computeHarmonicCompatibility } from "./harmonyCompatibility.js";
 
-const PORT = Number(process.env.PORT || 3001);
+let PORT = 3001;
+if (process.env.PORT) {
+  const parsedPort = Number(process.env.PORT);
+  if (!isNaN(parsedPort) && parsedPort >= 0 && parsedPort < 65536) {
+    PORT = parsedPort;
+  } else {
+    console.error(`Invalid PORT: ${process.env.PORT}, using default 3001`);
+  }
+}
 const HOST = process.env.HOST || "0.0.0.0";
 const SOCKET_PATH = process.env.SOCKET_PATH || "/socket";
 

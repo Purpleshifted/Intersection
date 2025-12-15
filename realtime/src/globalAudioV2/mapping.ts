@@ -98,26 +98,34 @@ export class GlobalMappingEvaluator {
   }
 
   static loadDefaultFromAssets() {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const mappingsPath = path.resolve(
-      __dirname,
-      "../../assets/global-workspace-mappings.json"
-    );
-    const raw = readFileSync(mappingsPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      throw new Error("global-workspace-mappings.json must be an array");
+    try {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      const mappingsPath = path.resolve(
+        __dirname,
+        "../../assets/global-workspace-mappings.json"
+      );
+      const raw = readFileSync(mappingsPath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        throw new Error("global-workspace-mappings.json must be an array");
+      }
+      const mappings = parsed.filter(
+        (m): m is MappingItem =>
+          m &&
+          typeof m === "object" &&
+          "nodeId" in m &&
+          "streams" in m &&
+          Array.isArray((m as { streams: unknown }).streams)
+      );
+      return new GlobalMappingEvaluator(mappings);
+    } catch (error) {
+      console.warn(
+        "[GlobalAudioV2] Failed to load mappings, using empty evaluator:",
+        error instanceof Error ? error.message : String(error)
+      );
+      return new GlobalMappingEvaluator([]);
     }
-    const mappings = parsed.filter(
-      (m): m is MappingItem =>
-        m &&
-        typeof m === "object" &&
-        "nodeId" in m &&
-        "streams" in m &&
-        Array.isArray((m as { streams: unknown }).streams)
-    );
-    return new GlobalMappingEvaluator(mappings);
   }
 
   generateParams(signals: GlobalSignals): NoiseCraftParam[] {
