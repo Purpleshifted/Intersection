@@ -115,8 +115,8 @@
 
 ### 서비스 URL 기록
 - Vercel 프론트엔드: `https://________________.vercel.app`
-- Render 실시간 서버: `https://________________.onrender.com`
-- Render NoiseCraft: `https://________________.onrender.com`
+- Render 실시간 서버: `https://intersection-1.onrender.com`
+- Render NoiseCraft: `https://intersection-1.onrender.com`
 
 ### 공유할 URL
 **프론트엔드 URL만 공유하면 됩니다!** (Vercel URL)
