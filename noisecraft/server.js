@@ -21,7 +21,7 @@ let cachedProjectData = null;
 
 // Initializing application configuration parameters
 const dbFilePath = process.env.DB_FILE_PATH || './database.db';
-const serverHTTPPortNo = process.env.HTTP_PORT_NO  || 7773;
+const serverHTTPPortNo = process.env.PORT || process.env.HTTP_PORT_NO || 4000;
 
 var app = express();
 
