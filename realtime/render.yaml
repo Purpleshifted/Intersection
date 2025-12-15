@@ -3,6 +3,7 @@ services:
     name: intersection-realtime
     env: node
     plan: free
+    rootDir: realtime
     buildCommand: yarn install && yarn build
     startCommand: yarn start
     envVars:

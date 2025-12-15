@@ -3,6 +3,7 @@ services:
     name: intersection-noisecraft
     env: node
     plan: free
+    rootDir: noisecraft
     buildCommand: yarn install
     startCommand: yarn start
     envVars:
