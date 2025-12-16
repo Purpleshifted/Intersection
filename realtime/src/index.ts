@@ -722,7 +722,13 @@ const allowedOrigins = Array.from(
   ])
 );
 
-const httpServer = http.createServer((_, res) => {
+const httpServer = http.createServer((req, res) => {
+  // Health check endpoint for keep-alive
+  if (req.url === '/health' || req.url === '/health/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+    return;
+  }
   res.statusCode = 200;
   res.end("ok");
 });
