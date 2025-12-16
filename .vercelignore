@@ -2,4 +2,6 @@
 noisecraft/
 realtime/
 legacy/
-
+# Also ignore any .next folders in subdirectories
+**/noisecraft/**
+**/realtime/**
