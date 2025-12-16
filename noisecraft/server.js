@@ -21,7 +21,7 @@ let cachedProjectData = null;
 
 // Initializing application configuration parameters
 const dbFilePath = process.env.DB_FILE_PATH || './database.db';
-const serverHTTPPortNo = process.env.PORT || process.env.HTTP_PORT_NO || 4000;
+const serverHTTPPortNo = Number(process.env.PORT || process.env.HTTP_PORT_NO || 4000);
 
 var app = express();
 
@@ -977,8 +977,14 @@ app.delete('/projects', async function (req, res)
 const host = process.env.HOST || '0.0.0.0';
 const server = app.listen(serverHTTPPortNo, host, () =>
 {
-    let address = server.address().address;
-    let port = server.address().port;
-    address = (address == "::")? "localhost":address;
-    console.log(`app started at ${address}:${port}`);
+    const addr = server.address();
+    if (addr) {
+        let address = addr.address;
+        let port = addr.port;
+        address = (address == "::")? "localhost":address;
+        console.log(`app started at ${address}:${port}`);
+    } else {
+        // Fallback: use the configured values directly
+        console.log(`app started at ${host}:${serverHTTPPortNo}`);
+    }
 });
