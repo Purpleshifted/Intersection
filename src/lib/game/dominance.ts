@@ -2,8 +2,7 @@
  * 주도권 계산 및 시각화 유틸리티
  */
 
-import type { GameState, PlayerSnapshot } from "@/types/game";
-import type { HarmonicState } from "@/lib/audio/harmony";
+import type { GameState, PlayerSnapshot, HarmonicState } from "@/types/game";
 
 // 타입 확장 (실제 구현 시 PlayerSnapshot에 추가 필요)
 interface ExtendedPlayerSnapshot extends PlayerSnapshot {
