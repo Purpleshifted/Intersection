@@ -12,15 +12,13 @@ const nextConfig = {
   },
 
   // Render 배포 시 하위 디렉토리의 .next 폴더를 무시
-  experimental: {
-    outputFileTracingExcludes: {
-      '*': [
-        'node_modules/noisecraft/**',
-        'node_modules/realtime/**',
-        'noisecraft/**',
-        'realtime/**',
-      ],
-    },
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/noisecraft/**',
+      'node_modules/realtime/**',
+      'noisecraft/**',
+      'realtime/**',
+    ],
   },
 };
 

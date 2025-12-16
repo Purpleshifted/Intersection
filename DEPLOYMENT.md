@@ -45,7 +45,7 @@
 3. GitHub 저장소 선택: `Purpleshifted/Intersection`
 4. 빌드 설정:
    - **Base directory**: `.`
-   - **Build command**: `yarn build`
+   - **Build command**: `yarn install && yarn build`
    - **Publish directory**: `.next`
    - **Framework preset**: Next.js (자동 감지)
 5. 환경 변수 추가:
@@ -62,7 +62,7 @@
 3. 설정:
    - **Name**: `intersection-frontend`
    - **Root Directory**: `.`
-   - **Build Command**: `yarn build`
+   - **Build Command**: `yarn install && yarn build`
    - **Start Command**: `yarn start`
    - **Plan**: Free
 4. 환경 변수 추가 후 배포
