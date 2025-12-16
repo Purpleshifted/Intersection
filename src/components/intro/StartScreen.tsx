@@ -72,13 +72,22 @@ const StartScreen = () => {
           />
         </div>
 
-        <button
-          className="rounded-lg border border-white bg-transparent px-12 py-3 text-sm font-normal text-white transition-all duration-300 hover:border-white/80 hover:text-white/90 active:scale-[0.98] vintage-serif w-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => handleEnter("personal")}
-          disabled={!selectedDifficulty}
-        >
-          Enter the space
-        </button>
+        <div className="flex flex-col gap-3 w-[200px]">
+          <button
+            className="rounded-lg border border-white bg-transparent px-12 py-3 text-sm font-normal text-white transition-all duration-300 hover:border-white/80 hover:text-white/90 active:scale-[0.98] vintage-serif disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => handleEnter("personal")}
+            disabled={!selectedDifficulty}
+          >
+            Enter the space
+          </button>
+          <button
+            className="rounded-lg border border-white/30 bg-white/10 px-12 py-3 text-sm font-normal text-white/80 transition-all duration-300 hover:border-white/50 hover:text-white active:scale-[0.98] vintage-serif disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => handleEnter("global")}
+            disabled={!selectedDifficulty}
+          >
+            Global view
+          </button>
+        </div>
       </div>
 
       <div className="mt-auto pt-8">
