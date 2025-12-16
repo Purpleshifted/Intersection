@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // 프로덕션 단일 컨테이너 배포를 위한 standalone 출력
   output: "standalone",
   // nginx가 basePath 처리하므로 제거
@@ -12,7 +11,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_ENABLE_PROFILER_IN_DEV: "false",
   },
 
-  // Vercel 배포 시 하위 디렉토리의 .next 폴더를 무시
+  // Render 배포 시 하위 디렉토리의 .next 폴더를 무시
   experimental: {
     outputFileTracingExcludes: {
       '*': [
@@ -25,4 +24,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
