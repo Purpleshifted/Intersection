@@ -973,7 +973,9 @@ app.delete('/projects', async function (req, res)
 
 //============================================================================
 
-const server = app.listen(serverHTTPPortNo, () =>
+// Render requires binding to 0.0.0.0 to detect the port
+const host = process.env.HOST || '0.0.0.0';
+const server = app.listen(serverHTTPPortNo, host, () =>
 {
     let address = server.address().address;
     let port = server.address().port;
