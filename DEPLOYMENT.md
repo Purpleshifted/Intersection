@@ -65,6 +65,12 @@
    - **Build Command**: `yarn install && yarn build`
    - **Start Command**: `yarn start`
    - **Plan**: Free
+   - **Environment**: `Node`
+   - **Environment Variables**:
+     ```
+     NODE_ENV=production
+     ```
+     ⚠️ **중요**: `NODE_ENV=production`을 설정하면 devDependencies가 설치되지 않을 수 있습니다. TypeScript는 이미 dependencies로 이동했습니다.
 4. 환경 변수 추가 후 배포
 
 > **다른 옵션들**: `DEPLOYMENT_ALTERNATIVES.md` 참고
