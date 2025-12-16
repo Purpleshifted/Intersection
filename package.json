@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:vercel": "rm -rf noisecraft/.next realtime/.next && next build",
     "start": "next start",
     "prod:build": "yarn ws:build && yarn build",
     "prod:start": "sh -c 'yarn workspace realtime start & next start'",
