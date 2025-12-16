@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_ENABLE_PROFILER_IN_DEV: "false",
   },
+
+  // Vercel 배포 시 하위 디렉토리의 .next 폴더를 무시
+  experimental: {
+    outputFileTracingExcludes: {
+      '*': [
+        'node_modules/noisecraft/**',
+        'node_modules/realtime/**',
+        'noisecraft/**',
+        'realtime/**',
+      ],
+    },
+  },
 };
 
 export default nextConfig;
