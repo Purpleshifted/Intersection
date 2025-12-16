@@ -1,0 +1,5 @@
+# Ignore workspaces that are deployed separately
+noisecraft/
+realtime/
+legacy/
+
