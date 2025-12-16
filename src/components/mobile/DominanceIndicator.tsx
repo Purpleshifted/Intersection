@@ -2,8 +2,7 @@
 
 import { useMemo } from "react";
 import { computeDominanceLevel } from "@/lib/game/dominance";
-import type { GameState } from "@/types/game";
-import type { HarmonicState } from "@/lib/audio/harmony";
+import type { GameState, HarmonicState } from "@/types/game";
 
 interface DominanceIndicatorProps {
   state: GameState;
