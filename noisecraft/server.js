@@ -497,11 +497,6 @@ app.post('/save-json/:filename', jsonParser, function (req, res) {
 });
 
 // Serve static file requests (after API routes)
-// Health check endpoint for keep-alive
-app.get('/health', function(req, res) {
-    res.status(200).json({ status: 'ok', timestamp: Date.now() });
-});
-
 app.use('/public', express.static('public'));
 
 // Serve examples directory

@@ -723,10 +723,11 @@ const allowedOrigins = Array.from(
 );
 
 const httpServer = http.createServer((req, res) => {
-  // Health check endpoint for keep-alive
-  if (req.url === '/health' || req.url === '/health/') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+  // Health check endpoint for Render sleep mode prevention
+  if (req.url === "/health" || req.url === "/") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/plain");
+    res.end("ok");
     return;
   }
   res.statusCode = 200;
