@@ -21,7 +21,13 @@ let cachedProjectData = null;
 
 // Initializing application configuration parameters
 const dbFilePath = process.env.DB_FILE_PATH || './database.db';
-const serverHTTPPortNo = Number(process.env.PORT || process.env.HTTP_PORT_NO || 4000);
+// Parse port from environment variable, with fallback
+const parsePort = (value) => {
+  if (!value) return null;
+  const port = Number(value);
+  return (!isNaN(port) && port > 0 && port < 65536) ? port : null;
+};
+const serverHTTPPortNo = parsePort(process.env.PORT) || parsePort(process.env.HTTP_PORT_NO) || 4000;
 
 var app = express();
 
