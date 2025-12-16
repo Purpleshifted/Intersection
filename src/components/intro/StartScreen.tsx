@@ -15,7 +15,7 @@ const StartScreen = () => {
 
   const handlePlay = () => {
     setMode("personal");
-    setDifficulty("easy"); // 기본값
+    // 이름과 난이도는 mobile 시작 화면에서 입력받음
     router.push("/mobile");
   };
 
