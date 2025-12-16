@@ -59,5 +59,77 @@ next-env.d.ts
 
 # Optional: ignore npm lockfile if using yarn
 package-lock.json
+**/package-lock.json
 
-certificates
+# Build artifacts and deploy folders
+noisecraft/deploy/
+realtime/.next/
+noisecraft/.next/
+**/.next/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment files (keep .env.example if needed)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+certificates/
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.lcov
+
+# Yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
