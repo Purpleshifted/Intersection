@@ -62,13 +62,19 @@ export default function ServerWakeUp() {
       }
     };
 
-    // 즉시 실행
+    // 즉시 실행 (페이지 로드 시)
     wakeUpServers();
 
-    // 5분마다 주기적으로 깨우기 (슬립 모드 방지)
-    const interval = setInterval(wakeUpServers, 5 * 60 * 1000);
+    // 1분 후 다시 실행 (서버가 깨어나는 시간 고려)
+    const firstRetry = setTimeout(wakeUpServers, 60 * 1000);
 
-    return () => clearInterval(interval);
+    // 3분마다 주기적으로 깨우기 (슬립 모드 방지, 5분보다 짧게)
+    const interval = setInterval(wakeUpServers, 3 * 60 * 1000);
+
+    return () => {
+      clearTimeout(firstRetry);
+      clearInterval(interval);
+    };
   }, []);
 
   return null; // UI 렌더링 없음
