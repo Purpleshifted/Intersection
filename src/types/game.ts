@@ -32,6 +32,9 @@ export interface PlayerSnapshot {
   // 화성 호환성 정보
   harmonicCompatibility?: number; // 0.0 ~ 1.0
   harmonicTargetId?: string | null;
+  // 부여받은 음
+  assignedNote?: string; // 'C', 'F', 'G' 등
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export interface SnapshotFrame {
