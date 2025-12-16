@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_ENABLE_PROFILER_IN_DEV: "false",
   },
+
+  // NoiseCraft 정적 파일을 /audiocraft 경로로 서빙
+  async rewrites() {
+    return [
+      {
+        source: "/audiocraft/:path*",
+        destination: "/noisecraft/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

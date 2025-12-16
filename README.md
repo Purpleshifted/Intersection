@@ -29,10 +29,11 @@ intersection-submission/
 │   └── types/             # TypeScript 타입 정의
 ├── realtime/              # Socket.IO 실시간 서버
 │   └── src/               # 서버 소스 코드
-├── noisecraft/            # NoiseCraft 오디오 서버
-│   ├── public/            # NoiseCraft 정적 파일
-│   └── examples/          # 오디오 프로젝트 파일
+├── noisecraft/            # NoiseCraft 소스 코드 (참고용)
+│   ├── public/            # NoiseCraft 정적 파일 (public/noisecraft로 복사됨)
+│   └── examples/          # 오디오 프로젝트 파일 (public/noisecraft/examples로 복사됨)
 └── public/                # 정적 리소스
+    └── noisecraft/        # NoiseCraft 통합 파일 (Next.js에서 서빙)
 ```
 
 ## 설치 및 실행
@@ -57,13 +58,13 @@ yarn dev
 # 실시간 서버 (터미널 2)
 cd realtime && yarn dev
 
-# NoiseCraft 서버 (터미널 3)
+# 개발 환경에서는 NoiseCraft도 별도 서버로 실행 (선택사항)
 cd noisecraft && yarn start
 ```
 
 3. 브라우저에서 접속:
 - 웹 애플리케이션: http://localhost:3000
-- NoiseCraft 서버: http://localhost:4000
+- 개발 환경에서 NoiseCraft 별도 서버: http://localhost:4000 (선택사항)
 
 ## 게임 플레이
 
@@ -80,37 +81,24 @@ cd noisecraft && yarn start
 
 ## 배포
 
-### Vercel 배포 (권장)
+이 프로젝트는 두 개의 서비스로 구성됩니다:
 
-1. GitHub에 프로젝트를 푸시합니다.
-2. [Vercel](https://vercel.com)에 로그인하고 새 프로젝트를 생성합니다.
-3. GitHub 저장소를 연결합니다.
-4. 환경 변수 설정:
-   - `NEXT_PUBLIC_WS_URL`: WebSocket 서버 URL (예: `wss://your-realtime-server.com/socket`)
-5. 배포를 시작합니다.
+1. **Next.js 프론트엔드** (Vercel 권장)
+   - NoiseCraft가 통합되어 있어 별도 서버 불필요
+   - 환경 변수: `NEXT_PUBLIC_WS_URL` (실시간 서버 URL)
 
-**참고**: Vercel은 정적 사이트와 서버리스 함수만 지원하므로, 실시간 서버(`realtime`)와 NoiseCraft 서버는 별도로 배포해야 합니다.
-
-### 실시간 서버 배포 (Render/Railway)
-
-1. [Render](https://render.com) 또는 [Railway](https://railway.app)에 계정을 생성합니다.
-2. 새 Web Service를 생성합니다.
-3. GitHub 저장소를 연결하고 `realtime` 폴더를 루트로 설정합니다.
-4. 빌드 명령: `yarn build`
-5. 시작 명령: `yarn start`
-6. 포트: `3001` (환경 변수로 설정)
-
-### NoiseCraft 서버 배포
-
-NoiseCraft 서버도 동일한 방식으로 Render/Railway에 배포할 수 있습니다.
+2. **실시간 서버** (Render/Railway)
+   - Socket.IO 서버
+   - 환경 변수: `PORT=3001`, `HOST=0.0.0.0`
 
 ## 환경 변수
 
 ### 프론트엔드 (.env.local)
 
 ```env
+# 개발 환경에서만 필요 (프로덕션에서는 자동으로 현재 origin 사용)
 NEXT_PUBLIC_WS_URL=http://localhost:3001/socket
-NEXT_PUBLIC_NOISECRAFT_WS_URL=http://localhost:4000
+NEXT_PUBLIC_NOISECRAFT_WS_URL=http://localhost:4000  # 개발 환경에서만 사용
 ```
 
 ### 실시간 서버

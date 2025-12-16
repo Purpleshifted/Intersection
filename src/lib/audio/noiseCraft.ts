@@ -65,7 +65,7 @@ export const resolveNoiseCraftEmbed = () => {
 
   const rawNcEnv =
     process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL ||
-    (isDev ? "http://localhost:4000" : "/audiocraft");
+    (isDev ? "http://localhost:4000" : "");
   const rawRtEnv =
     process.env.NEXT_PUBLIC_WS_URL ||
     (isDev ? "http://localhost:3001/socket" : "/socket");
@@ -76,15 +76,17 @@ export const resolveNoiseCraftEmbed = () => {
   const ncEnv = resolveEnvUrl(rawNcEnv, "4000");
   const rtEnv = resolveEnvUrl(rawRtEnv, "3001");
 
-  const ncBase = ncEnv;
+  // 프로덕션에서 경로만 주어진 경우(빈 문자열 또는 /audiocraft) 현재 origin 사용
+  const ncBase = ncEnv || (isDev ? "http://localhost:4000" : "");
   const rtUrl = rtEnv;
-  const normalizedNcBase = ncBase.replace(/\/$/, "");
+  const normalizedNcBase = ncBase ? ncBase.replace(/\/$/, "") : "";
   const normalizePatchSrc = (raw: string) => {
     if (/^https?:\/\//i.test(raw)) return raw;
     if (raw.startsWith("/")) {
-      return `${normalizedNcBase}${raw}`;
+      // 프로덕션에서 normalizedNcBase가 비어있으면 현재 origin 사용
+      return normalizedNcBase ? `${normalizedNcBase}${raw}` : raw;
     }
-    return `${normalizedNcBase}/${raw}`;
+    return normalizedNcBase ? `${normalizedNcBase}/${raw}` : `/${raw}`;
   };
   // NOTE: NoiseCraft 서버는 examples/ 폴더를 /public/examples 로 서빙한다.
   // docker-compose 등에서 /examples/... 로 설정되어 있으면 자동으로 보정한다.
@@ -143,7 +145,11 @@ export const resolveNoiseCraftEmbed = () => {
     } else if (patchProjectId) {
       embedSearch.set("project", patchProjectId);
     } else {
-      embedSearch.set("src", `${normalizedNcBase}/current-project`);
+      // 프로덕션에서는 /api/audiocraft/current-project 사용
+      const currentProjectUrl = normalizedNcBase 
+        ? `${normalizedNcBase}/current-project`
+        : "/api/audiocraft/current-project";
+      embedSearch.set("src", currentProjectUrl);
     }
   }
   // /mobile 과 /mobile/debug 에서 iframe 모드를 구분하기 위한 view 쿼리
@@ -154,7 +160,9 @@ export const resolveNoiseCraftEmbed = () => {
   } else if (path.startsWith("/mobile")) {
     embedSearch.set("view", "mobile");
   }
-  const src = `${normalizedNcBase}/public/embedded.html?${embedSearch.toString()}`;
+  // 프로덕션에서 normalizedNcBase가 비어있으면 /audiocraft 사용 (Next.js rewrites로 매핑됨)
+  const basePath = normalizedNcBase || "/audiocraft";
+  const src = `${basePath}/public/embedded.html?${embedSearch.toString()}`;
   const embedOrigin = new URL(src, pageOrigin).origin;
   // eslint-disable-next-line no-console
   console.log("[NoiseCraft] resolveNoiseCraftEmbed result:", {
