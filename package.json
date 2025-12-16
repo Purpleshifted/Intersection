@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:vercel": "rm -rf noisecraft/.next realtime/.next noisecraft/node_modules/.next realtime/node_modules/.next 2>/dev/null || true && next build && rm -rf noisecraft/.next realtime/.next 2>/dev/null || true",
+    "build:vercel": "mv noisecraft noisecraft.tmp 2>/dev/null || true && mv realtime realtime.tmp 2>/dev/null || true && next build && mv noisecraft.tmp noisecraft 2>/dev/null || true && mv realtime.tmp realtime 2>/dev/null || true",
     "start": "next start",
     "prod:build": "yarn ws:build && yarn build",
     "prod:start": "sh -c 'yarn workspace realtime start & next start'",
