@@ -329,9 +329,9 @@ const renderPlayers = ({
     }
 
     // 개인 뷰에서 자기 공에 파티클 효과 적용
-    // 모바일 뷰에서는 selfId가 있으면 파티클 렌더링 (조건 완화)
-    const isSelfPlayer = isSelf || (state.selfId && playerId === state.selfId);
-    if (isPersonal && isSelfPlayer) {
+    // 모바일 뷰: 이미 위에서 selfId 체크를 했으므로, 여기 도달한 플레이어는 무조건 자기 자신
+    // isSelf가 false여도 selfId로 체크했으므로 파티클 렌더링
+    if (isPersonal) {
       // 연결선이 공 내부에서 보이지 않도록, 공 뒤에 넓은 검은 그라데이션 배경을 깔아준다
       const bgRadius = radius * 5;
       const bgGradient = ctx.createRadialGradient(
