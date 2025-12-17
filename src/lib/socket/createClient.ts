@@ -30,18 +30,30 @@ const getDefaultServerUrl = () =>
 
 const resolveSocketEndpoint = (rawUrl: string, origin: string) => {
   try {
-    // 절대 URL인 경우 page.origin을 무시하고 직접 파싱
+    let urlStr = rawUrl.trim();
+    
+    // 이미 wss:// 또는 ws://로 시작하면 그대로 사용
+    if (/^wss?:\/\//i.test(urlStr)) {
+      // 이미 WebSocket 프로토콜이 있으면 그대로 사용
+    } else if (/^https?:\/\//i.test(urlStr)) {
+      // https:// 또는 http://가 있으면 wss:// 또는 ws://로 변환
+      urlStr = urlStr.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+    } else if (!urlStr.startsWith("/")) {
+      // 프로토콜이 없고 경로도 아니면 wss:// 추가
+      urlStr = `wss://${urlStr}`;
+    }
+    
+    // 절대 URL인 경우 origin을 무시하고 직접 파싱
     let url: URL;
-    if (/^wss?:\/\//i.test(rawUrl)) {
+    if (/^wss?:\/\//i.test(urlStr)) {
       // 이미 절대 URL이면 origin 무시
-      url = new URL(rawUrl);
-    } else if (rawUrl.startsWith("/")) {
+      url = new URL(urlStr);
+    } else if (urlStr.startsWith("/")) {
       // 상대 경로인 경우 origin 사용
-      url = new URL(rawUrl, origin);
+      url = new URL(urlStr, origin);
     } else {
-      // 프로토콜이 없는 호스트명만 있는 경우 wss:// 추가 후 파싱
-      const urlWithProtocol = `wss://${rawUrl}`;
-      url = new URL(urlWithProtocol);
+      // 프로토콜도 경로도 아니면 에러
+      throw new Error(`Invalid URL format: ${urlStr}`);
     }
     
     const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
