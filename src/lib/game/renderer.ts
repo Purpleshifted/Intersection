@@ -273,7 +273,12 @@ const renderPlayers = ({
   state.playerOrder.forEach((playerId, index) => {
     const player = state.players[playerId];
     if (!player) return;
-    if (isPersonal && !Boolean(player.isSelf)) {
+    // 모바일 뷰에서는 selfId가 있으면 해당 플레이어만 렌더링
+    if (isPersonal && state.selfId) {
+      if (playerId !== state.selfId) {
+        return;
+      }
+    } else if (isPersonal && !Boolean(player.isSelf)) {
       // 디버깅: 첫 번째 스킵된 플레이어만 로그
       if (index === 0 && state.selfId) {
         // eslint-disable-next-line no-console
