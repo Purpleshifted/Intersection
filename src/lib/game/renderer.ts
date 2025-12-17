@@ -203,7 +203,8 @@ const renderParticleBall = (
     const wobbleAngle =
       2 * simpleNoise(wobbleSeedX * 0.5, wobbleSeedY * 0.5, time * 0.18);
 
-    const finalRadius = Math.min(radius + wobbleR, radius);
+    // 버그 수정: finalRadius 계산이 잘못되어 있었음
+    const finalRadius = radius + wobbleR;
     const finalAngle = angle + wobbleAngle;
 
     const x = centerX + Math.cos(finalAngle) * finalRadius + driftX;
