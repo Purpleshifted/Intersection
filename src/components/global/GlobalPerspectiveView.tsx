@@ -861,18 +861,6 @@ const GlobalPerspectiveView = ({
               borderRadius: 8,
             }}
           />
-          <button
-            type="button"
-            onClick={handleStartAudio}
-            disabled={audioStatus === "pending" || audioStatus === "playing"}
-            className="mt-2 w-full rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/60"
-          >
-            {audioStatus === "pending"
-              ? "시작 중…"
-              : audioStatus === "playing"
-              ? "재생 중"
-              : "Start Audio"}
-          </button>
         </div>
       )}
       {showModeToggle && (

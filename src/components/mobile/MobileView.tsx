@@ -630,12 +630,23 @@ const MobileView = () => {
     }
   };
 
+  // 할당받은 음 표시
+  const selfPlayer = state.selfId ? state.players[state.selfId] : null;
+  const assignedNote = selfPlayer?.assignedNote;
+
   return (
     <div className="relative min-h-screen w-full bg-black">
       <CanvasSurface ref={canvasRef} />
       {/* <Hud state={state} /> */}
       {/* <StatusBanner state={state} /> */}
       {/* <Controls /> */}
+      {/* 할당받은 음 표시 */}
+      {assignedNote && (
+        <div className="pointer-events-auto absolute top-4 left-4 rounded-xl bg-black/80 px-4 py-2 text-sm font-medium text-white vintage-serif">
+          <div className="text-white/60 text-xs">Your Note</div>
+          <div className="text-lg">{assignedNote}</div>
+        </div>
+      )}
       <div className="pointer-events-auto absolute bottom-4 left-4 flex h-auto w-[340px] flex-col gap-2 rounded-xl bg-black/80 p-3 text-xs text-white">
         <iframe
           ref={audioIframeRef}
@@ -653,18 +664,6 @@ const MobileView = () => {
           }
           style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8 }}
         />
-        <button
-          type="button"
-          onClick={handleStartAudio}
-          disabled={audioStatus === "pending" || audioStatus === "playing"}
-          className="mt-2 w-full rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/60"
-        >
-          {audioStatus === "pending"
-            ? "시작 중…"
-            : audioStatus === "playing"
-            ? "재생 중"
-            : "Start Audio"}
-        </button>
       </div>
     </div>
   );

@@ -102,7 +102,7 @@ const collisionEvents: Array<{
 const collidingNow = new Set<string>();
 const COLLISION_DISTANCE = 80;
 const MIN_GRAVITY_DISTANCE = 80;
-const MAX_GRAVITY_DISTANCE = 1500; // 중력 작용 최대 반경 (기존보다 넓게)
+const MAX_GRAVITY_DISTANCE = 2500; // 중력 작용 최대 반경 (더 넓게 확장)
 const MAX_SPEED = 320;
 const PLAYER_BASE_MASS = 5000;
 const INPUT_SMOOTH = 0.02;
@@ -362,9 +362,10 @@ function applyNearestGravity(p: Player, list: Player[], dt: number) {
       MAX_GRAVITY_ACCEL
     );
   
-  // 호환성이 높을수록 중력 강도 증가 (최대 3배, 더 강하게)
-  // 호환성 1.0일 때 3배, 0.5일 때 2배, 0일 때 1배
-  const harmonicBoost = 1.0 + (bestCompatibility * 2.0); // 1.0 ~ 3.0
+  // 호환성이 높을수록 중력 강도 증가 (최대 5배, 더 강하게)
+  // 호환성 1.0일 때 5배, 0.5일 때 3배, 0일 때 1배
+  // 궁합이 좋은 공들끼리 더 쉽게 붙도록 강도 증가
+  const harmonicBoost = 1.0 + (bestCompatibility * 4.0); // 1.0 ~ 5.0
   const accelMagnitude = baseAccelMagnitude * harmonicBoost;
   
   // 호환성 정보를 Player에 저장 (비주얼 피드백용)
