@@ -848,31 +848,14 @@ export const renderScene = (params: RenderParams) => {
   // playing 상태가 false이지만 플레이어가 있으면 강제로 렌더링 (재연결 중일 수 있음)
   // 개인 뷰에서는 selfId만 있으면 렌더링 (파티클 표시를 위해)
   // 모바일 뷰에서는 플레이어가 하나라도 있으면 렌더링 (selfId가 아직 설정되지 않았을 수 있음)
-  // 또는 socket이 연결되어 있으면 렌더링 (연결 중일 수 있음)
-  const hasPlayers = Object.keys(params.state.players).length > 0;
-  const hasSocketId = params.state.socketId !== null;
-  const playerCount = Object.keys(params.state.players).length;
+  // 통합 렌더링 조건 체크 유틸리티 사용
+  const renderCheck = checkRenderCondition(params.state);
+  const shouldRender = renderCheck.shouldRender;
   
-  // 모바일 뷰: 플레이어가 하나라도 있으면 렌더링 (초기 연결 시 selfId가 없을 수 있음)
-  // 또는 socket이 연결되어 있으면 렌더링 (연결 중일 수 있음)
-  const shouldRender = 
-    params.state.playing || 
-    (params.state.mode === "personal" && (params.state.selfId || hasPlayers || hasSocketId)) || 
-    (params.state.mode === "global" && hasPlayers);
-  
-  // 디버깅: 렌더링 조건 로그 (shouldRender가 false일 때만 출력하여 스팸 방지)
-  if (params.state.mode === "personal" && !shouldRender) {
+  // 디버깅: 렌더링 조건 로그 (shouldRender가 false일 때만 출력, 개발 환경에서만)
+  if (!shouldRender && process.env.NODE_ENV === "development") {
     // eslint-disable-next-line no-console
-    console.log("[Renderer] Render check - personal mode (NOT RENDERING):", {
-      shouldRender,
-      playing: params.state.playing,
-      selfId: params.state.selfId,
-      hasPlayers,
-      hasSocketId,
-      playerCount,
-      playerOrderLength: params.state.playerOrder.length,
-      players: Object.keys(params.state.players),
-    });
+    console.log("[Renderer] Render check - NOT RENDERING:", renderCheck);
   }
   
   if (shouldRender) {

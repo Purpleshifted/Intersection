@@ -1,4 +1,5 @@
 import type { NoiseCraftParam } from "@/lib/audio/noiseCraftCore";
+import { resolveHttpUrl, resolveWebSocketUrl } from "@/lib/config/urlResolver";
 export type {
   NoiseCraftParam,
   PersonalAudioMetrics,
@@ -42,9 +43,6 @@ export const resolveNoiseCraftEmbed = () => {
     NODE_ENV: process.env.NODE_ENV,
     pageOrigin,
   });
-  // 통합 URL 해석 유틸리티 사용
-  const { resolveHttpUrl, resolveWebSocketUrl } = require("@/lib/config/urlResolver");
-
   const rawNcEnv =
     process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL ||
     (isDev ? "http://localhost:4000" : "/audiocraft");
@@ -53,8 +51,16 @@ export const resolveNoiseCraftEmbed = () => {
     (isDev ? "http://localhost:3001/socket" : "/socket");
 
   // 통합 URL 해석 유틸리티 사용
-  const ncResolved = resolveHttpUrl(rawNcEnv, isDev ? "http://localhost:4000" : "/audiocraft", pageOrigin);
-  const rtResolved = resolveWebSocketUrl(rawRtEnv, isDev ? "http://localhost:3001/socket" : "/socket", pageOrigin);
+  const ncResolved = resolveHttpUrl(
+    rawNcEnv,
+    isDev ? "http://localhost:4000" : "/audiocraft",
+    pageOrigin
+  );
+  const rtResolved = resolveWebSocketUrl(
+    rawRtEnv,
+    isDev ? "http://localhost:3001/socket" : "/socket",
+    pageOrigin
+  );
   
   const ncEnv = ncResolved.fullUrl;
   const rtEnv = rtResolved.fullUrl;
