@@ -818,7 +818,8 @@ export const renderScene = (params: RenderParams) => {
 
   clearScene(params.ctx, params.width, params.height);
   // playing 상태가 false이지만 플레이어가 있으면 강제로 렌더링 (재연결 중일 수 있음)
-  const shouldRender = params.state.playing || (params.state.mode === "personal" && params.state.selfId && Object.keys(params.state.players).length > 0);
+  // 개인 뷰에서는 selfId만 있으면 렌더링 (파티클 표시를 위해)
+  const shouldRender = params.state.playing || (params.state.mode === "personal" && params.state.selfId) || (params.state.mode === "global" && Object.keys(params.state.players).length > 0);
   if (shouldRender) {
     if (params.state.mode === "personal") {
       // 개인 뷰: 자기 궤적 + 자기 공 + 자기와 관련된 연결선만 표시

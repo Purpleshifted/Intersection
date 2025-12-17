@@ -777,15 +777,6 @@ const GlobalPerspectiveView = ({
     );
   };
 
-  const handleSpawnBot = () => {
-    if (!socket) return;
-    socket.emit("bot:spawn");
-  };
-
-  const handleRemoveBot = () => {
-    if (!socket) return;
-    socket.emit("bot:remove");
-  };
 
   return (
     <div
@@ -846,24 +837,6 @@ const GlobalPerspectiveView = ({
               ? "재생 중"
               : "Start Audio"}
           </button>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={handleSpawnBot}
-              disabled={!socket}
-              className="flex-1 rounded-lg bg-green-500/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-500/60"
-            >
-              + Bot
-            </button>
-            <button
-              type="button"
-              onClick={handleRemoveBot}
-              disabled={!socket}
-              className="flex-1 rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-500/60"
-            >
-              - Bot
-            </button>
-          </div>
         </div>
       )}
       {showModeToggle && (

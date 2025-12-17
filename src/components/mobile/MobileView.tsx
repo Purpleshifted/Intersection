@@ -375,6 +375,13 @@ const MobileView = () => {
       if (data.type === "noiseCraft:projectLoaded") {
         setIsProjectReady(true);
         setAudioStatus((prev) => (prev === "playing" ? prev : "ready"));
+        // 프로젝트 로드 완료 시 자동으로 재생 시작
+        if (audioIframeRef.current) {
+          audioIframeRef.current.contentWindow?.postMessage(
+            { type: "noiseCraft:play" },
+            noiseCraftOrigin || "*"
+          );
+        }
       } else if (
         data.type === "noiseCraft:audioState" &&
         typeof data.status === "string"
