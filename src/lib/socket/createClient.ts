@@ -2,6 +2,7 @@
 
 import { io } from "socket.io-client";
 import type { Mode } from "@/types/game";
+import { resolveWebSocketUrl } from "@/lib/config/urlResolver";
 
 export interface GameSocket {
   id: string | null | undefined;
@@ -30,42 +31,12 @@ const getDefaultServerUrl = () =>
 
 const resolveSocketEndpoint = (rawUrl: string, origin: string) => {
   try {
-    let urlStr = rawUrl.trim();
-    
-    // 이미 wss:// 또는 ws://로 시작하면 그대로 사용
-    if (/^wss?:\/\//i.test(urlStr)) {
-      // 이미 WebSocket 프로토콜이 있으면 그대로 사용
-    } else if (/^https?:\/\//i.test(urlStr)) {
-      // https:// 또는 http://가 있으면 wss:// 또는 ws://로 변환
-      urlStr = urlStr.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
-    } else if (!urlStr.startsWith("/")) {
-      // 프로토콜이 없고 경로도 아니면 wss:// 추가
-      urlStr = `wss://${urlStr}`;
-    }
-    
-    // 절대 URL인 경우 origin을 무시하고 직접 파싱
-    let url: URL;
-    if (/^wss?:\/\//i.test(urlStr)) {
-      // 이미 절대 URL이면 origin 무시
-      url = new URL(urlStr);
-    } else if (urlStr.startsWith("/")) {
-      // 상대 경로인 경우 origin 사용
-      url = new URL(urlStr, origin);
-    } else {
-      // 프로토콜도 경로도 아니면 에러
-      throw new Error(`Invalid URL format: ${urlStr}`);
-    }
-    
-    const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
-    const path = normalizedPath === "/" ? DEFAULT_SOCKET_PATH : normalizedPath;
-    
-    // WebSocket 프로토콜 변환 (http -> ws, https -> wss)
-    const protocol = url.protocol === "https:" ? "wss:" : url.protocol === "http:" ? "ws:" : url.protocol;
-    const originUrl = `${protocol}//${url.host}`;
+    // 통합 URL 해석 유틸리티 사용
+    const resolved = resolveWebSocketUrl(rawUrl, DEFAULT_SOCKET_PATH, origin);
     
     return {
-      origin: originUrl,
-      path,
+      origin: resolved.origin,
+      path: resolved.path === "/" ? DEFAULT_SOCKET_PATH : resolved.path,
     };
   } catch (error) {
     // eslint-disable-next-line no-console

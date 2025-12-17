@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { GameProvider } from "@/context/GameContext";
 import ServerWakeUp from "@/components/shared/ServerWakeUp";
+import ConnectionStatus from "@/components/shared/ConnectionStatus";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,7 @@ export default function RootLayout({
       >
         <GameProvider>
           <ServerWakeUp />
+          <ConnectionStatus />
           {children}
         </GameProvider>
       </body>

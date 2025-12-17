@@ -1,4 +1,5 @@
 import type { GameState, Vec2 } from "@/types/game";
+import { checkRenderCondition } from "@/lib/game/renderConditions";
 
 type ProjectionMode = "plane" | "lines";
 

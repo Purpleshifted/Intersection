@@ -42,49 +42,8 @@ export const resolveNoiseCraftEmbed = () => {
     NODE_ENV: process.env.NODE_ENV,
     pageOrigin,
   });
-  const replaceLocalhostHost = (raw: string, defaultPort: string) => {
-    try {
-      // 프로토콜이 없는 경우 (호스트명만 있는 경우) https:// 추가
-      let urlStr = raw;
-      if (!/^https?:\/\//i.test(raw) && !raw.startsWith("/")) {
-        // 호스트명만 있는 경우 (예: "intersection-w4uh.onrender.com")
-        urlStr = `https://${raw}`;
-      }
-      // 절대 URL인 경우 pageOrigin을 무시하고 직접 파싱
-      let url: URL;
-      if (/^https?:\/\//i.test(urlStr)) {
-        url = new URL(urlStr);
-      } else {
-        url = new URL(urlStr, pageOrigin);
-      }
-      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-        const protocol = pageUrl.protocol;
-        const port = url.port || defaultPort;
-        const path = url.pathname || "/";
-        const hostPart = port
-          ? `${pageUrl.hostname}:${port}`
-          : pageUrl.hostname;
-        return `${protocol}//${hostPart}${path}`;
-      }
-      return url.toString();
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[NoiseCraft] replaceLocalhostHost error:", error, { raw, pageOrigin });
-      return raw;
-    }
-  };
-  const resolveEnvUrl = (raw: string, defaultPort: string) => {
-    // 경로만 주어진 경우(/audiocraft, /socket)는 항상 현재 origin 기준으로만 사용
-    if (raw.startsWith("/")) {
-      try {
-        return new URL(raw, pageOrigin).toString();
-      } catch {
-        return raw;
-      }
-    }
-    // 절대 URL인 경우에는 localhost → 현재 호스트 재작성 로직 유지
-    return replaceLocalhostHost(raw, defaultPort);
-  };
+  // 통합 URL 해석 유틸리티 사용
+  const { resolveHttpUrl, resolveWebSocketUrl } = require("@/lib/config/urlResolver");
 
   const rawNcEnv =
     process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL ||
@@ -93,11 +52,12 @@ export const resolveNoiseCraftEmbed = () => {
     process.env.NEXT_PUBLIC_WS_URL ||
     (isDev ? "http://localhost:3001/socket" : "/socket");
 
-  // 개발 환경에서 localhost/127.0.0.1 또는 절대 URL이 설정된 경우,
-  // 현재 접속 호스트(IP/도메인) 기준으로 다시 작성.
-  // 경로만 주어진 경우(/audiocraft, /socket)는 항상 현재 origin을 그대로 사용.
-  const ncEnv = resolveEnvUrl(rawNcEnv, "4000");
-  const rtEnv = resolveEnvUrl(rawRtEnv, "3001");
+  // 통합 URL 해석 유틸리티 사용
+  const ncResolved = resolveHttpUrl(rawNcEnv, isDev ? "http://localhost:4000" : "/audiocraft", pageOrigin);
+  const rtResolved = resolveWebSocketUrl(rawRtEnv, isDev ? "http://localhost:3001/socket" : "/socket", pageOrigin);
+  
+  const ncEnv = ncResolved.fullUrl;
+  const rtEnv = rtResolved.fullUrl;
 
   // 디버깅: URL 해석 결과 확인
   // eslint-disable-next-line no-console
