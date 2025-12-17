@@ -50,7 +50,13 @@ export const resolveNoiseCraftEmbed = () => {
         // 호스트명만 있는 경우 (예: "intersection-w4uh.onrender.com")
         urlStr = `https://${raw}`;
       }
-      const url = new URL(urlStr, pageOrigin);
+      // 절대 URL인 경우 pageOrigin을 무시하고 직접 파싱
+      let url: URL;
+      if (/^https?:\/\//i.test(urlStr)) {
+        url = new URL(urlStr);
+      } else {
+        url = new URL(urlStr, pageOrigin);
+      }
       if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
         const protocol = pageUrl.protocol;
         const port = url.port || defaultPort;
@@ -61,7 +67,9 @@ export const resolveNoiseCraftEmbed = () => {
         return `${protocol}//${hostPart}${path}`;
       }
       return url.toString();
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[NoiseCraft] replaceLocalhostHost error:", error, { raw, pageOrigin });
       return raw;
     }
   };
@@ -90,6 +98,16 @@ export const resolveNoiseCraftEmbed = () => {
   // 경로만 주어진 경우(/audiocraft, /socket)는 항상 현재 origin을 그대로 사용.
   const ncEnv = resolveEnvUrl(rawNcEnv, "4000");
   const rtEnv = resolveEnvUrl(rawRtEnv, "3001");
+
+  // 디버깅: URL 해석 결과 확인
+  // eslint-disable-next-line no-console
+  console.log("[NoiseCraft] URL resolution:", {
+    rawNcEnv,
+    rawRtEnv,
+    ncEnv,
+    rtEnv,
+    pageOrigin,
+  });
 
   const ncBase = ncEnv;
   const rtUrl = rtEnv;
@@ -170,12 +188,31 @@ export const resolveNoiseCraftEmbed = () => {
     embedSearch.set("view", "mobile");
   }
   const src = `${normalizedNcBase}/public/embedded.html?${embedSearch.toString()}`;
-  const embedOrigin = new URL(src, pageOrigin).origin;
+  
+  // embedOrigin 계산: src가 절대 URL이면 그 origin 사용, 아니면 pageOrigin 사용
+  let embedOrigin: string | null = null;
+  try {
+    // src가 절대 URL인지 확인
+    if (/^https?:\/\//i.test(src)) {
+      const srcUrl = new URL(src);
+      embedOrigin = srcUrl.origin;
+    } else {
+      // 상대 경로인 경우 pageOrigin 사용
+      const srcUrl = new URL(src, pageOrigin);
+      embedOrigin = srcUrl.origin;
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[NoiseCraft] Failed to parse embed origin:", error, { src, pageOrigin });
+    embedOrigin = null;
+  }
+  
   // eslint-disable-next-line no-console
   console.log("[NoiseCraft] resolveNoiseCraftEmbed result:", {
     path,
     src,
     embedOrigin,
+    normalizedNcBase,
     searchParams: embedSearch.toString(),
   });
   return { src, origin: embedOrigin };
