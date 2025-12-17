@@ -123,11 +123,22 @@ export const createSocketClient = async ({
 
   socket.on("connect_error", (error) => {
     // eslint-disable-next-line no-console
+    const errorInfo = error instanceof Error
+      ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        }
+      : typeof error === "object" && error !== null
+      ? {
+          message: String((error as { message?: unknown }).message ?? "Unknown error"),
+          description: String((error as { description?: unknown }).description ?? ""),
+          context: String((error as { context?: unknown }).context ?? ""),
+          type: String((error as { type?: unknown }).type ?? ""),
+        }
+      : { message: String(error) };
     console.error("[Socket] Connection error:", {
-      message: error.message,
-      description: error.description,
-      context: error.context,
-      type: error.type,
+      ...errorInfo,
       resolvedOrigin: resolved.origin,
       resolvedPath: resolved.path,
     });
@@ -145,7 +156,12 @@ export const createSocketClient = async ({
 
   socket.on("reconnect_error", (error) => {
     // eslint-disable-next-line no-console
-    console.error("[Socket] Reconnection error:", error);
+    const errorInfo = error instanceof Error
+      ? { message: error.message, name: error.name }
+      : typeof error === "object" && error !== null
+      ? { message: String((error as { message?: unknown }).message ?? "Unknown error") }
+      : { message: String(error) };
+    console.error("[Socket] Reconnection error:", errorInfo);
   });
 
   socket.on("reconnect_failed", () => {
