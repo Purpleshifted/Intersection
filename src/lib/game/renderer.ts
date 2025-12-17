@@ -279,18 +279,21 @@ const renderPlayers = ({
       if (playerId !== state.selfId) {
         return;
       }
-    } else if (isPersonal && !Boolean(player.isSelf)) {
-      // 디버깅: 첫 번째 스킵된 플레이어만 로그
-      if (index === 0 && state.selfId) {
-        // eslint-disable-next-line no-console
-        console.log("[Renderer] Skipping non-self player in personal view", {
-          playerId,
-          isSelf: player.isSelf,
-          selfId: state.selfId,
-          totalPlayers: state.playerOrder.length,
-        });
+    } else if (isPersonal && !state.selfId) {
+      // selfId가 없으면 isSelf로 체크
+      if (!Boolean(player.isSelf)) {
+        // 디버깅: 첫 번째 스킵된 플레이어만 로그
+        if (index === 0) {
+          // eslint-disable-next-line no-console
+          console.log("[Renderer] Skipping non-self player in personal view (no selfId)", {
+            playerId,
+            isSelf: player.isSelf,
+            selfId: state.selfId,
+            totalPlayers: state.playerOrder.length,
+          });
+        }
+        return;
       }
-      return;
     }
     const { cell, depth } = player;
     // dead-reckoning(속도 기반 추가 예측) 없이,

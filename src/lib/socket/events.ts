@@ -194,6 +194,13 @@ export const registerSocketEvents = ({
       displayName,
     });
 
+    // eslint-disable-next-line no-console
+    console.log("[Global] flushGlobalMove:", {
+      userDataCount: pending.userData?.length || 0,
+      playersCount: Object.keys(players).length,
+      orderLength: order.length,
+    });
+
     // spectator는 fast 업데이트를 쓰지 않으므로 그대로 반영
     dispatch({ type: "SET_PLAYERS", players, order, selfId: currentSelfId });
 
@@ -247,6 +254,11 @@ export const registerSocketEvents = ({
     }
   ) => {
     if (mode === "global") {
+      // eslint-disable-next-line no-console
+      console.log("[Global] onPlayerMove received:", {
+        userDataCount: userData?.length || 0,
+        hasMeta: !!meta,
+      });
       pendingGlobalMove = { playerData, userData, meta };
       scheduleGlobalMove();
       return;
