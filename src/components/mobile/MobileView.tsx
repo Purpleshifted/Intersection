@@ -167,6 +167,8 @@ const MobileView = () => {
   useEffect(() => {
     // src/origin 계산은 클라이언트에서만 수행
     const cfg = resolveNoiseCraftEmbed();
+    // eslint-disable-next-line no-console
+    console.log("[Mobile] NoiseCraft config:", cfg);
     setNoiseCraftConfig(cfg);
   }, []);
 
@@ -367,12 +369,29 @@ const MobileView = () => {
   }, [state, noiseCraftOrigin, isDebugView, isProjectReady]);
 
   useEffect(() => {
-    if (!noiseCraftOrigin) return;
+    if (!noiseCraftOrigin) {
+      // eslint-disable-next-line no-console
+      console.warn("[Mobile] NoiseCraft origin not set:", {
+        noiseCraftSrc,
+        noiseCraftOrigin,
+        env: process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL,
+      });
+      return;
+    }
     const handleMessage = (event: MessageEvent) => {
+      // eslint-disable-next-line no-console
+      console.log("[Mobile] Message from iframe:", {
+        origin: event.origin,
+        expectedOrigin: noiseCraftOrigin,
+        type: event.data?.type,
+        data: event.data,
+      });
       if (event.origin !== noiseCraftOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       if (data.type === "noiseCraft:projectLoaded") {
+        // eslint-disable-next-line no-console
+        console.log("[Mobile] Project loaded, starting audio");
         setIsProjectReady(true);
         setAudioStatus((prev) => (prev === "playing" ? prev : "ready"));
         // 프로젝트 로드 완료 시 자동으로 재생 시작
@@ -387,6 +406,8 @@ const MobileView = () => {
         typeof data.status === "string"
       ) {
         const status = data.status as AudioStatus;
+        // eslint-disable-next-line no-console
+        console.log("[Mobile] Audio status changed:", status);
         setAudioStatus((prev) => {
           if (status === "pending") return prev;
           if (status === "ready" && prev === "playing") return prev;
@@ -396,7 +417,7 @@ const MobileView = () => {
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [noiseCraftOrigin]);
+  }, [noiseCraftOrigin, noiseCraftSrc]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

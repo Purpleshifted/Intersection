@@ -61,7 +61,15 @@ export const createSocketClient = async ({
     window.location.origin
   );
 
-  return io(resolved.origin, {
+  // eslint-disable-next-line no-console
+  console.log("[Socket] Connecting to:", {
+    serverUrl,
+    resolved,
+    mode,
+    defaultUrl: getDefaultServerUrl(),
+  });
+
+  const socket = io(resolved.origin, {
     path: resolved.path,
     query: {
       type: mode === "personal" ? "player" : "spectator",
@@ -69,4 +77,16 @@ export const createSocketClient = async ({
     transports: ["websocket"],
     withCredentials: true,
   }) as GameSocket;
+
+  socket.on("connect", () => {
+    // eslint-disable-next-line no-console
+    console.log("[Socket] Connected:", socket.id);
+  });
+
+  socket.on("connect_error", (error) => {
+    // eslint-disable-next-line no-console
+    console.error("[Socket] Connection error:", error);
+  });
+
+  return socket;
 };
