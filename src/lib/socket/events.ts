@@ -267,12 +267,34 @@ export const registerSocketEvents = ({
     const effectivePlayerData = mode === "personal" ? playerData : undefined;
     const currentSelfId =
       getState().selfId ?? playerData.id ?? socket.id ?? undefined;
+    
+    // 디버깅: 서버에서 받은 데이터 확인
+    // eslint-disable-next-line no-console
+    console.log("[Mobile] onPlayerMove - received data:", {
+      mode,
+      playerDataId: playerData?.id,
+      userDataCount: userData?.length || 0,
+      currentSelfId,
+      socketId: socket.id,
+      stateSelfId: getState().selfId,
+    });
+    
     const { players, order } = mapServerPayloadToSnapshots({
       playerData: effectivePlayerData,
       userData,
       mode,
       selfId: currentSelfId,
       displayName,
+    });
+    
+    // 디버깅: 매핑 결과 확인
+    // eslint-disable-next-line no-console
+    console.log("[Mobile] onPlayerMove - mapped snapshots:", {
+      playersCount: Object.keys(players).length,
+      orderLength: order.length,
+      playerIds: Object.keys(players),
+      order,
+      selfPlayer: currentSelfId ? players[currentSelfId] : null,
     });
 
     if (mode === "personal" && currentSelfId) {
@@ -339,6 +361,16 @@ export const registerSocketEvents = ({
 
     // personal 모드에서는 항상 SET_PLAYERS를 먼저 호출하여 자기 플레이어가 있는지 확인
     if (mode === "personal") {
+      // 디버깅: 플레이어 데이터 확인
+      // eslint-disable-next-line no-console
+      console.log("[Mobile] onPlayerMove - setting players:", {
+        playerCount: Object.keys(players).length,
+        orderLength: order.length,
+        selfId: currentSelfId,
+        hasSelfPlayer: currentSelfId ? !!players[currentSelfId] : false,
+        playerIds: Object.keys(players),
+        order,
+      });
       dispatch({ type: "SET_PLAYERS", players, order, selfId: currentSelfId });
       dispatch({
         type: "PUSH_SNAPSHOT_FRAME",

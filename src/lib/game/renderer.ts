@@ -274,25 +274,30 @@ const renderPlayers = ({
   state.playerOrder.forEach((playerId, index) => {
     const player = state.players[playerId];
     if (!player) return;
-    // 모바일 뷰에서는 selfId가 있으면 해당 플레이어만 렌더링
-    if (isPersonal && state.selfId) {
-      if (playerId !== state.selfId) {
-        return;
-      }
-    } else if (isPersonal && !state.selfId) {
-      // selfId가 없으면 isSelf로 체크
-      if (!Boolean(player.isSelf)) {
-        // 디버깅: 첫 번째 스킵된 플레이어만 로그
-        if (index === 0) {
-          // eslint-disable-next-line no-console
-          console.log("[Renderer] Skipping non-self player in personal view (no selfId)", {
-            playerId,
-            isSelf: player.isSelf,
-            selfId: state.selfId,
-            totalPlayers: state.playerOrder.length,
-          });
+    
+    // 모바일 뷰: 항상 자기 자신만 렌더링
+    if (isPersonal) {
+      // selfId가 있으면 해당 플레이어만 렌더링
+      if (state.selfId) {
+        if (playerId !== state.selfId) {
+          return;
         }
-        return;
+      } else {
+        // selfId가 없으면 isSelf로 체크 (서버에서 아직 selfId를 받지 못한 경우)
+        if (!Boolean(player.isSelf)) {
+          // 디버깅: 첫 번째 스킵된 플레이어만 로그
+          if (index === 0) {
+            // eslint-disable-next-line no-console
+            console.log("[Renderer] Skipping non-self player in personal view (no selfId):", {
+              playerId,
+              isSelf: player.isSelf,
+              selfId: state.selfId,
+              totalPlayers: state.playerOrder.length,
+              allPlayerIds: state.playerOrder,
+            });
+          }
+          return;
+        }
       }
     }
     const { cell, depth } = player;
@@ -845,20 +850,27 @@ export const renderScene = (params: RenderParams) => {
   // 또는 socket이 연결되어 있으면 렌더링 (연결 중일 수 있음)
   const hasPlayers = Object.keys(params.state.players).length > 0;
   const hasSocketId = params.state.socketId !== null;
+  const playerCount = Object.keys(params.state.players).length;
+  
+  // 모바일 뷰: 플레이어가 하나라도 있으면 렌더링 (초기 연결 시 selfId가 없을 수 있음)
+  // 또는 socket이 연결되어 있으면 렌더링 (연결 중일 수 있음)
   const shouldRender = 
     params.state.playing || 
     (params.state.mode === "personal" && (params.state.selfId || hasPlayers || hasSocketId)) || 
     (params.state.mode === "global" && hasPlayers);
   
-  // 디버깅: 렌더링 조건 로그
-  if (params.state.mode === "personal" && !shouldRender) {
+  // 디버깅: 렌더링 조건 로그 (더 자세한 정보)
+  if (params.state.mode === "personal") {
     // eslint-disable-next-line no-console
-    console.log("[Renderer] Not rendering - personal mode:", {
+    console.log("[Renderer] Render check - personal mode:", {
+      shouldRender,
       playing: params.state.playing,
       selfId: params.state.selfId,
       hasPlayers,
       hasSocketId,
-      playerCount: Object.keys(params.state.players).length,
+      playerCount,
+      playerOrderLength: params.state.playerOrder.length,
+      players: Object.keys(params.state.players),
     });
   }
   
