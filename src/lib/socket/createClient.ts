@@ -108,6 +108,12 @@ export const createSocketClient = async ({
     },
     transports: ["websocket"],
     withCredentials: true,
+    // 재연결 옵션 추가 (Render 무료 플랜 슬립 모드 대응)
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 10,
+    timeout: 20000,
   }) as GameSocket;
 
   socket.on("connect", () => {
@@ -117,7 +123,34 @@ export const createSocketClient = async ({
 
   socket.on("connect_error", (error) => {
     // eslint-disable-next-line no-console
-    console.error("[Socket] Connection error:", error);
+    console.error("[Socket] Connection error:", {
+      message: error.message,
+      description: error.description,
+      context: error.context,
+      type: error.type,
+      resolvedOrigin: resolved.origin,
+      resolvedPath: resolved.path,
+    });
+  });
+
+  socket.on("reconnect", (attemptNumber) => {
+    // eslint-disable-next-line no-console
+    console.log("[Socket] Reconnected after", attemptNumber, "attempts");
+  });
+
+  socket.on("reconnect_attempt", (attemptNumber) => {
+    // eslint-disable-next-line no-console
+    console.log("[Socket] Reconnection attempt", attemptNumber);
+  });
+
+  socket.on("reconnect_error", (error) => {
+    // eslint-disable-next-line no-console
+    console.error("[Socket] Reconnection error:", error);
+  });
+
+  socket.on("reconnect_failed", () => {
+    // eslint-disable-next-line no-console
+    console.error("[Socket] Reconnection failed after all attempts");
   });
 
   return socket;

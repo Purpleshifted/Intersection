@@ -859,10 +859,10 @@ export const renderScene = (params: RenderParams) => {
     (params.state.mode === "personal" && (params.state.selfId || hasPlayers || hasSocketId)) || 
     (params.state.mode === "global" && hasPlayers);
   
-  // 디버깅: 렌더링 조건 로그 (더 자세한 정보)
-  if (params.state.mode === "personal") {
+  // 디버깅: 렌더링 조건 로그 (shouldRender가 false일 때만 출력하여 스팸 방지)
+  if (params.state.mode === "personal" && !shouldRender) {
     // eslint-disable-next-line no-console
-    console.log("[Renderer] Render check - personal mode:", {
+    console.log("[Renderer] Render check - personal mode (NOT RENDERING):", {
       shouldRender,
       playing: params.state.playing,
       selfId: params.state.selfId,
