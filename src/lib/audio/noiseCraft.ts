@@ -33,6 +33,15 @@ export const resolveNoiseCraftEmbed = () => {
   const isDev = process.env.NODE_ENV === "development";
   const pageOrigin = window.location.origin;
   const pageUrl = new URL(pageOrigin);
+  
+  // 디버깅: 환경 변수 확인
+  // eslint-disable-next-line no-console
+  console.log("[NoiseCraft] Environment check:", {
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
+    NEXT_PUBLIC_NOISECRAFT_WS_URL: process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    pageOrigin,
+  });
   const replaceLocalhostHost = (raw: string, defaultPort: string) => {
     try {
       const url = new URL(raw, pageOrigin);

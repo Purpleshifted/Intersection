@@ -45,7 +45,22 @@ export const GameProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!envWsUrl) return;
+    
+    // 디버깅: 환경 변수 확인
+    // eslint-disable-next-line no-console
+    console.log("[GameContext] Environment check:", {
+      NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
+      envWsUrl,
+      fallbackUrl,
+      NODE_ENV: process.env.NODE_ENV,
+      origin: typeof window !== "undefined" ? window.location.origin : "N/A",
+    });
+    
+    if (!envWsUrl) {
+      // eslint-disable-next-line no-console
+      console.warn("[GameContext] NEXT_PUBLIC_WS_URL not set, using fallback:", fallbackUrl);
+      return;
+    }
 
     const page = window.location;
 
