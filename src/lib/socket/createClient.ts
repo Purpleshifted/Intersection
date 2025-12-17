@@ -30,14 +30,34 @@ const getDefaultServerUrl = () =>
 
 const resolveSocketEndpoint = (rawUrl: string, origin: string) => {
   try {
-    const url = new URL(rawUrl, origin);
+    // 절대 URL인 경우 page.origin을 무시하고 직접 파싱
+    let url: URL;
+    if (/^wss?:\/\//i.test(rawUrl)) {
+      // 이미 절대 URL이면 origin 무시
+      url = new URL(rawUrl);
+    } else if (rawUrl.startsWith("/")) {
+      // 상대 경로인 경우 origin 사용
+      url = new URL(rawUrl, origin);
+    } else {
+      // 프로토콜이 없는 호스트명만 있는 경우 wss:// 추가 후 파싱
+      const urlWithProtocol = `wss://${rawUrl}`;
+      url = new URL(urlWithProtocol);
+    }
+    
     const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
     const path = normalizedPath === "/" ? DEFAULT_SOCKET_PATH : normalizedPath;
+    
+    // WebSocket 프로토콜 변환 (http -> ws, https -> wss)
+    const protocol = url.protocol === "https:" ? "wss:" : url.protocol === "http:" ? "ws:" : url.protocol;
+    const originUrl = `${protocol}//${url.host}`;
+    
     return {
-      origin: `${url.protocol}//${url.host}`,
+      origin: originUrl,
       path,
     };
-  } catch {
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[Socket] resolveSocketEndpoint error:", error, { rawUrl, origin });
     return {
       origin,
       path: DEFAULT_SOCKET_PATH,

@@ -89,7 +89,17 @@ export const GameProvider = ({ children }: { children: React.ReactNode }) => {
           urlStr = `https://${envWsUrl}`;
         }
       }
-      const absoluteUrl = new URL(urlStr, page.origin);
+      
+      // 절대 URL인 경우 page.origin을 무시하고 직접 파싱
+      // (new URL(urlStr, page.origin)은 urlStr이 상대 경로일 때만 page.origin을 사용)
+      let absoluteUrl: URL;
+      if (/^wss?:\/\//i.test(urlStr)) {
+        // 이미 절대 URL이면 page.origin 무시
+        absoluteUrl = new URL(urlStr);
+      } else {
+        // 상대 경로인 경우에만 page.origin 사용
+        absoluteUrl = new URL(urlStr, page.origin);
+      }
 
       // 개발용 localhost/127.0.0.1이 설정된 경우,
       // 현재 접속한 호스트(IP/도메인)에 맞게 호스트만 교체
@@ -104,9 +114,15 @@ export const GameProvider = ({ children }: { children: React.ReactNode }) => {
         const rewritten = `${protocol}//${hostPart}${path}`;
         setServerUrl(rewritten);
       } else {
+        // 절대 URL을 그대로 사용 (wss:// 또는 ws:// 포함)
         setServerUrl(absoluteUrl.toString());
       }
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[GameContext] URL resolution error:", error, {
+        envWsUrl,
+        pageOrigin: page.origin,
+      });
       setServerUrl(envWsUrl);
     }
   }, []);
