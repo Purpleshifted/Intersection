@@ -707,6 +707,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://intersection-audio.onrender.com",
   "https://intersection-nextjs.site",
   "https://www.intersection-nextjs.site",
+  // Render 배포 도메인 (현재 사용 중)
+  "https://intersection-llj7.onrender.com",
+  "https://intersection-w4uh.onrender.com",
+  "https://intersection-1.onrender.com",
 ];
 
 const parseOrigins = (raw?: string) =>
@@ -768,14 +772,32 @@ const originChecker: SocketIoCorsOriginFn = (
   callback: (err: Error | null, allow?: boolean) => void
 ) => {
   // socket.io에서 origin이 undefined로 들어오는 경우가 있어서 허용
-  if (!origin) return callback(null, true);
-  if (allowedOrigins.includes(origin)) return callback(null, true);
+  if (!origin) {
+    console.log("[CORS] Allowing connection with no origin");
+    return callback(null, true);
+  }
+  
+  // 디버깅: CORS 체크 로그
+  console.log("[CORS] Checking origin:", origin, {
+    allowedOrigins,
+    isAllowed: allowedOrigins.includes(origin),
+    isDev,
+    allowIpOriginsAlways,
+    allowIpOriginsInDev,
+  });
+  
+  if (allowedOrigins.includes(origin)) {
+    console.log("[CORS] Origin allowed:", origin);
+    return callback(null, true);
+  }
   if (
     (allowIpOriginsAlways || (isDev && allowIpOriginsInDev)) &&
     isLocalLikeOrigin(origin)
   ) {
+    console.log("[CORS] Origin allowed (local-like):", origin);
     return callback(null, true);
   }
+  console.error("[CORS] Origin NOT allowed:", origin);
   return callback(new Error("CORS origin not allowed"), false);
 };
 
