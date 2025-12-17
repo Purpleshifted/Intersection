@@ -827,10 +827,26 @@ export const renderScene = (params: RenderParams) => {
   // playing 상태가 false이지만 플레이어가 있으면 강제로 렌더링 (재연결 중일 수 있음)
   // 개인 뷰에서는 selfId만 있으면 렌더링 (파티클 표시를 위해)
   // 모바일 뷰에서는 플레이어가 하나라도 있으면 렌더링 (selfId가 아직 설정되지 않았을 수 있음)
+  // 또는 socket이 연결되어 있으면 렌더링 (연결 중일 수 있음)
+  const hasPlayers = Object.keys(params.state.players).length > 0;
+  const hasSocketId = params.state.socketId !== null;
   const shouldRender = 
     params.state.playing || 
-    (params.state.mode === "personal" && (params.state.selfId || Object.keys(params.state.players).length > 0)) || 
-    (params.state.mode === "global" && Object.keys(params.state.players).length > 0);
+    (params.state.mode === "personal" && (params.state.selfId || hasPlayers || hasSocketId)) || 
+    (params.state.mode === "global" && hasPlayers);
+  
+  // 디버깅: 렌더링 조건 로그
+  if (params.state.mode === "personal" && !shouldRender) {
+    // eslint-disable-next-line no-console
+    console.log("[Renderer] Not rendering - personal mode:", {
+      playing: params.state.playing,
+      selfId: params.state.selfId,
+      hasPlayers,
+      hasSocketId,
+      playerCount: Object.keys(params.state.players).length,
+    });
+  }
+  
   if (shouldRender) {
     if (params.state.mode === "personal") {
       // 개인 뷰: 자기 궤적 + 자기 공 + 자기와 관련된 연결선만 표시

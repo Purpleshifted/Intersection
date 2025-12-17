@@ -744,12 +744,29 @@ const GlobalPerspectiveView = ({
   }, [socket, noiseCraftOrigin, isProjectReady]);
 
   useEffect(() => {
-    if (!noiseCraftOrigin) return;
+    if (!noiseCraftOrigin) {
+      // eslint-disable-next-line no-console
+      console.warn("[Global] NoiseCraft origin not set:", {
+        noiseCraftSrc,
+        noiseCraftOrigin,
+        env: process.env.NEXT_PUBLIC_NOISECRAFT_WS_URL,
+      });
+      return;
+    }
     const handleMessage = (event: MessageEvent) => {
+      // eslint-disable-next-line no-console
+      console.log("[Global] Message from iframe:", {
+        origin: event.origin,
+        expectedOrigin: noiseCraftOrigin,
+        type: event.data?.type,
+        data: event.data,
+      });
       if (event.origin !== noiseCraftOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       if (data.type === "noiseCraft:projectLoaded") {
+        // eslint-disable-next-line no-console
+        console.log("[Global] Project loaded, setting ready");
         setIsProjectReady(true);
         setAudioStatus((prev) => (prev === "playing" ? prev : "ready"));
       } else if (
@@ -757,6 +774,8 @@ const GlobalPerspectiveView = ({
         typeof data.status === "string"
       ) {
         const status = data.status as "pending" | "ready" | "playing";
+        // eslint-disable-next-line no-console
+        console.log("[Global] Audio status changed:", status);
         setAudioStatus((prev) => {
           if (status === "pending") return prev;
           if (status === "ready" && prev === "playing") return prev;
@@ -766,15 +785,32 @@ const GlobalPerspectiveView = ({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [noiseCraftOrigin]);
+  }, [noiseCraftOrigin, noiseCraftSrc]);
 
   const handleStartAudio = () => {
-    if (!audioIframeRef.current) return;
+    if (!audioIframeRef.current) {
+      // eslint-disable-next-line no-console
+      console.warn("[Global] Audio iframe not available");
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.log("[Global] Starting audio, isProjectReady:", isProjectReady);
     setAudioStatus("pending");
     audioIframeRef.current.contentWindow?.postMessage(
       { type: "noiseCraft:play" },
       noiseCraftOrigin || "*"
     );
+    // 프로젝트가 로드되지 않았을 경우를 대비해 잠시 후 재시도
+    if (!isProjectReady) {
+      setTimeout(() => {
+        // eslint-disable-next-line no-console
+        console.log("[Global] Retrying audio start after delay");
+        audioIframeRef.current?.contentWindow?.postMessage(
+          { type: "noiseCraft:play" },
+          noiseCraftOrigin || "*"
+        );
+      }, 2000);
+    }
   };
 
 
