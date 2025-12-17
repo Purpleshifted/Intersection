@@ -94,8 +94,8 @@ Vercel에서 문제가 발생할 경우 사용할 수 있는 무료 대안들입
 4. 환경 변수:
    ```
    NODE_ENV=production
-   NEXT_PUBLIC_WS_URL=wss://intersection-realtime.onrender.com/socket
-   NEXT_PUBLIC_NOISECRAFT_WS_URL=https://intersection-noisecraft.onrender.com
+   NEXT_PUBLIC_WS_URL=wss://intersection-w4uh.onrender.com/socket
+   NEXT_PUBLIC_NOISECRAFT_WS_URL=https://intersection-1.onrender.com
    ```
 5. "Create Web Service" 클릭
 

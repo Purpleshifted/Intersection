@@ -50,8 +50,8 @@
    - **Framework preset**: Next.js (자동 감지)
 5. 환경 변수 추가:
    ```
-   NEXT_PUBLIC_WS_URL=wss://your-realtime-server.onrender.com/socket
-   NEXT_PUBLIC_NOISECRAFT_WS_URL=https://your-noisecraft-server.onrender.com
+   NEXT_PUBLIC_WS_URL=wss://intersection-w4uh.onrender.com/socket
+   NEXT_PUBLIC_NOISECRAFT_WS_URL=https://intersection-1.onrender.com
    ```
 6. "Deploy site" 클릭
 
@@ -116,9 +116,14 @@
 
 환경 변수:
 ```
-NEXT_PUBLIC_WS_URL=wss://intersection-realtime.onrender.com/socket
-NEXT_PUBLIC_NOISECRAFT_WS_URL=https://intersection-noisecraft.onrender.com
+NEXT_PUBLIC_WS_URL=wss://intersection-w4uh.onrender.com/socket
+NEXT_PUBLIC_NOISECRAFT_WS_URL=https://intersection-1.onrender.com
 ```
+
+**⚠️ 중요**: 실제 배포된 서버 URL로 변경하세요!
+- 프론트엔드: `https://intersection-llj7.onrender.com`
+- Realtime 서버: `https://intersection-w4uh.onrender.com`
+- NoiseCraft 서버: `https://intersection-1.onrender.com`
 
 업데이트 후 재배포
 
