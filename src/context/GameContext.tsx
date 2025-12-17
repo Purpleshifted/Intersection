@@ -79,7 +79,17 @@ export const GameProvider = ({ children }: { children: React.ReactNode }) => {
 
     // 2) 절대 URL이 주어진 경우: 기존 localhost 재작성 로직 유지
     try {
-      const absoluteUrl = new URL(envWsUrl, page.origin);
+      // 프로토콜이 없는 경우 (호스트명만 있는 경우) wss:// 또는 https:// 추가
+      let urlStr = envWsUrl;
+      if (!/^wss?:\/\//i.test(envWsUrl) && !envWsUrl.startsWith("/")) {
+        // WebSocket URL인 경우 wss://, 일반 URL인 경우 https://
+        if (envWsUrl.includes("/socket") || envWsUrl.includes(":3001")) {
+          urlStr = `wss://${envWsUrl}`;
+        } else {
+          urlStr = `https://${envWsUrl}`;
+        }
+      }
+      const absoluteUrl = new URL(urlStr, page.origin);
 
       // 개발용 localhost/127.0.0.1이 설정된 경우,
       // 현재 접속한 호스트(IP/도메인)에 맞게 호스트만 교체
@@ -89,7 +99,7 @@ export const GameProvider = ({ children }: { children: React.ReactNode }) => {
       ) {
         const port = absoluteUrl.port || "3001";
         const path = absoluteUrl.pathname || "/socket";
-        const protocol = page.protocol;
+        const protocol = page.protocol === "https:" ? "wss:" : "ws:";
         const hostPart = port ? `${page.hostname}:${port}` : page.hostname;
         const rewritten = `${protocol}//${hostPart}${path}`;
         setServerUrl(rewritten);

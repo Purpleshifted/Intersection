@@ -44,7 +44,13 @@ export const resolveNoiseCraftEmbed = () => {
   });
   const replaceLocalhostHost = (raw: string, defaultPort: string) => {
     try {
-      const url = new URL(raw, pageOrigin);
+      // 프로토콜이 없는 경우 (호스트명만 있는 경우) https:// 추가
+      let urlStr = raw;
+      if (!/^https?:\/\//i.test(raw) && !raw.startsWith("/")) {
+        // 호스트명만 있는 경우 (예: "intersection-w4uh.onrender.com")
+        urlStr = `https://${raw}`;
+      }
+      const url = new URL(urlStr, pageOrigin);
       if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
         const protocol = pageUrl.protocol;
         const port = url.port || defaultPort;

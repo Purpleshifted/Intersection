@@ -354,6 +354,17 @@ const renderPlayers = ({
       ctx.fillStyle = bgGradient;
       ctx.fill();
 
+      // 디버깅: 파티클 렌더링 호출 확인
+      // eslint-disable-next-line no-console
+      if (index === 0) {
+        console.log("[Renderer] Rendering particle ball for self player:", {
+          playerId,
+          position: { x: screenPos.x, y: screenPos.y },
+          radius,
+          hasGravityDir: !!player.gravityDir,
+          gravityDist: player.gravityDist,
+        });
+      }
       renderParticleBall(
         ctx,
         screenPos.x,
