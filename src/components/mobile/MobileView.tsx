@@ -549,7 +549,8 @@ const MobileView = () => {
     };
   }, [socket]);
 
-  const shouldShowIframe = isDebugView ? true : isProjectReady;
+  // 프로젝트가 준비되지 않아도 iframe은 보여주되, 오디오는 준비될 때까지 대기
+  const shouldShowIframe = true; // 항상 iframe 표시
 
   // NoiseCraft 파라미터 브리지: 실제 플레이어 속도 → 주파수 매핑
   useEffect(() => {
@@ -592,10 +593,20 @@ const MobileView = () => {
   const handleStartAudio = () => {
     if (!audioIframeRef.current) return;
     setAudioStatus("pending");
+    // 프로젝트가 준비되지 않았어도 재생 시도
     audioIframeRef.current.contentWindow?.postMessage(
       { type: "noiseCraft:play" },
       noiseCraftOrigin || "*"
     );
+    // 프로젝트가 로드되지 않았을 경우를 대비해 잠시 후 재시도
+    if (!isProjectReady) {
+      setTimeout(() => {
+        audioIframeRef.current?.contentWindow?.postMessage(
+          { type: "noiseCraft:play" },
+          noiseCraftOrigin || "*"
+        );
+      }, 1000);
+    }
   };
 
   return (

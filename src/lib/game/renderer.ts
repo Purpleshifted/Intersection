@@ -324,7 +324,8 @@ const renderPlayers = ({
     }
 
     // 개인 뷰에서 자기 공에 파티클 효과 적용
-    if (isPersonal && isSelf) {
+    // 모바일 뷰에서는 selfId가 있으면 파티클 렌더링
+    if (isPersonal && (isSelf || (state.selfId && playerId === state.selfId))) {
       // 연결선이 공 내부에서 보이지 않도록, 공 뒤에 넓은 검은 그라데이션 배경을 깔아준다
       const bgRadius = radius * 5;
       const bgGradient = ctx.createRadialGradient(
