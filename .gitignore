@@ -133,3 +133,14 @@ coverage/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Documentation files (not needed for submission)
+legacy/
+DEPLOYMENT_ALTERNATIVES.md
+DEPLOYMENT.md
+ENV_SETUP.md
+FIX_RENDER_ENV.md
+LOCAL_TESTING.md
+RENDER_URLS.md
+TODO_NEXT.md
+PROJECT_REVIEW.md
