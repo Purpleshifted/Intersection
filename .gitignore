@@ -135,12 +135,8 @@ coverage/
 .pnp.*
 
 # Documentation files (not needed for submission)
+# Keep only README.md in each folder
 legacy/
-DEPLOYMENT_ALTERNATIVES.md
-DEPLOYMENT.md
-ENV_SETUP.md
-FIX_RENDER_ENV.md
-LOCAL_TESTING.md
-RENDER_URLS.md
-TODO_NEXT.md
-PROJECT_REVIEW.md
+**/*.md
+!README.md
+!**/README.md
